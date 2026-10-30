@@ -1,0 +1,74 @@
+:root {
+  /* ==========================================================================
+     ARJUVISUALS.CO — BRAND COLOR PALETTE
+     Dark Red (#270707), Stone (#F1EBEB), Deep Red (#660810)
+     ========================================================================== */
+  --dark-red: #270707;
+  --stone: #F1EBEB;
+  --deep-red: #660810;
+
+  /* Supporting colors */
+  --white: #FFFFFF;
+  --soft-white: #F8F4F4;
+  --muted: #B8AAAA;
+  --muted-dark: #7A6868;
+  --dark-border: #492A2C;
+  --red-tint: #8A2630;
+  --deep-red-hover: #4E060C;
+  --dark-red-elevated: #361010;
+  --dark-red-deep: #1E0505;
+  --stone-deep: #E7DFDF;
+  --stone-dark: #DDD4D4;
+
+  /* Semantic design system variables */
+  --color-dark-red: var(--dark-red);
+  --color-stone: var(--stone);
+  --color-deep-red: var(--deep-red);
+  --color-white: var(--white);
+  --color-soft-white: var(--soft-white);
+  --color-muted-gray: var(--muted);
+  --color-dark-border: var(--dark-border);
+  --color-red-tint: var(--red-tint);
+
+  --color-background: var(--stone);
+  --color-background-dark: var(--dark-red);
+  --color-primary: var(--deep-red);
+  --color-text-dark: var(--dark-red);
+  --color-text-light: var(--stone);
+  --color-accent: var(--deep-red);
+  --color-border: var(--dark-border);
+
+  /* Legacy aliases mapped to new palette for comprehensive coverage */
+  --cyprus: var(--deep-red);             /* #660810 brand accent */
+  --cyprus-deep: var(--deep-red-hover);  /* #4E060C */
+  --cyprus-mid: var(--red-tint);         /* #8A2630 */
+  --cyprus-soft: var(--red-tint);        /* #8A2630 */
+  --sand: var(--stone);                  /* #F1EBEB main light background */
+  --sand-deep: var(--stone-deep);        /* #E7DFDF */
+  --sand-dark: var(--stone-dark);        /* #DDD4D4 */
+  --black: var(--dark-red);              /* #270707 main dark background */
+  --ink: #1B0404;                        /* deepest text */
+  --line: rgba(39, 7, 7, 0.12);
+  --line-light: rgba(241, 235, 235, 0.18);
+  --danger: #8b2e2e;
+  --ok: #1d6b4f;
+
+  --font-display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+  --font-editorial: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-body: "Outfit", "Segoe UI", sans-serif;
+  --font-script: "Caveat", "Reenie Beanie", "Brush Script MT", cursive;
+
+  --nav-h: 88px;
+  --page-pad: clamp(1.25rem, 4vw, 4.5rem);
+  --max: 1320px;
+  --radius: 6px;
+  --radius-lg: 14px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow: 0 24px 60px rgba(39, 7, 7, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ease: linear;
+  }
+}

@@ -1,0 +1,51 @@
+/** Demo inquiries for the admin prototype. Not real messages. */
+export const defaultInquiries = [
+  {
+    id: "inq-1001",
+    name: "Meera Krishnan",
+    email: "meera.sample@example.com",
+    phone: "",
+    service: "Portrait Photography",
+    eventDate: "2026-03-14",
+    location: "Thrissur",
+    budget: "",
+    message:
+      "Looking for a quiet portrait sitting — natural light, no heavy posing. This is sample demo data.",
+    status: "new",
+    notes: "",
+    createdAt: "2026-02-02T09:12:00.000Z",
+    demo: true,
+  },
+  {
+    id: "inq-1002",
+    name: "Adel Rahman",
+    email: "adel.sample@example.com",
+    phone: "",
+    service: "Commercial Photography",
+    eventDate: "2026-04-02",
+    location: "Kochi",
+    budget: "To discuss",
+    message:
+      "Need product and lifestyle frames for a small coffee brand. Demo inquiry only.",
+    status: "reviewed",
+    notes: "Follow up after exam week.",
+    createdAt: "2026-01-28T14:40:00.000Z",
+    demo: true,
+  },
+  {
+    id: "inq-1003",
+    name: "Studio North",
+    email: "hello.sample@example.com",
+    phone: "",
+    service: "Cinematography",
+    eventDate: "2026-05-20",
+    location: "Malappuram",
+    budget: "",
+    message:
+      "Short cinematic piece for a campus event. Placeholder inquiry for dashboard testing.",
+    status: "archived",
+    notes: "",
+    createdAt: "2026-01-12T11:05:00.000Z",
+    demo: true,
+  },
+];

@@ -1,0 +1,107 @@
+/* ==========================================================================
+   ARJUVISUALS.CO — MINIMAL, PROFESSIONAL PAGE TRANSITIONS & LOADER
+   Seamless, cinematic luxury transition across all routes
+   ========================================================================== */
+
+.av-minimal-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--dark-red-deep, #1E0505);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.22s ease;
+  will-change: opacity, transform;
+}
+
+.av-minimal-loader.is-exiting {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.av-minimal-loader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.35rem;
+  padding: 2rem;
+  animation: avLoaderContentIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes avLoaderContentIn {
+  from {
+    opacity: 0.7;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.av-loader-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.av-loader-title {
+  font-family: var(--font-display, "Bebas Neue", sans-serif);
+  font-size: clamp(2.3rem, 5vw, 3rem);
+  letter-spacing: 0.14em;
+  color: var(--stone, #F1EBEB);
+  line-height: 1;
+}
+
+.av-loader-dot {
+  color: #EA4B4B;
+  transition: color 0.3s ease;
+}
+
+.av-loader-subtitle {
+  font-family: var(--font-body, "Outfit", sans-serif);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(241, 235, 235, 0.6);
+  min-height: 1.1rem;
+}
+
+.av-loader-line-track {
+  width: 140px;
+  height: 2px;
+  background: rgba(241, 235, 235, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.av-loader-line-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #660810, #C2222E, #F1EBEB);
+  border-radius: 999px;
+  transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 0 10px rgba(194, 34, 46, 0.6), 0 0 4px rgba(241, 235, 235, 0.3);
+  will-change: width;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .av-minimal-loader,
+  .av-loader-line-fill,
+  .av-minimal-loader-content {
+    animation: none !important;
+    transition: none !important;
+  }
+}

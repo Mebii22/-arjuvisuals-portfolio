@@ -1,0 +1,883 @@
+/* ==========================================================================
+   ARJUVISUALS.CO — SEPARATED, SMOOTH FLOATING DOODLE SYSTEM
+   Crafted for Arjun Murali's photography portfolio:
+   - Independent organic floating (4 unique float patterns, non-synchronized)
+   - Widely scattered composition with generous negative space
+   - Glitch-free tactile interactions (no frame drops, no line-boil jitter)
+   - Studio Web Audio synthesizer with user gesture auto-unlock & limiter
+   ========================================================================== */
+
+.doodle-field-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: visible;
+}
+
+/* Authentic subtle sketchbook pattern backdrop */
+.doodle-pattern-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--dark-red);
+  opacity: 0.055;
+  transition: opacity 0.5s ease;
+  mask-image: radial-gradient(circle at 45% 50%, rgba(0, 0, 0, 0.38) 0%, rgba(0, 0, 0, 0.9) 58%, rgba(0, 0, 0, 0.35) 100%);
+  -webkit-mask-image: radial-gradient(circle at 45% 50%, rgba(0, 0, 0, 0.38) 0%, rgba(0, 0, 0, 0.9) 58%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+.dark-theme .doodle-pattern-bg,
+.combo-cyprus .doodle-pattern-bg {
+  color: var(--stone);
+  opacity: 0.065;
+}
+
+.doodle-pattern-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Scene container */
+.doodle-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: visible;
+}
+
+/* Individual positioned doodle item */
+.ds-item,
+.interactive-doodle-wrap.ds-item {
+  position: absolute !important;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.interactive-doodle-wrap:hover,
+.interactive-doodle-wrap.is-hovered {
+  z-index: 25;
+}
+
+/* ==========================================================================
+   INTERACTIVE DOODLE WRAPPER: Entrance, opacity, and positioning
+   ========================================================================== */
+.interactive-doodle-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: var(--dark-red);
+  opacity: 0.72;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+  transition:
+    opacity 0.35s ease,
+    color 0.3s ease;
+  will-change: transform, opacity;
+  perspective: 600px;
+}
+
+/* Hidden before scroll entrance */
+.interactive-doodle-wrap.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Smooth artistic sketch entrance (gentle fade & rise, zero flickering or dot popping) */
+.interactive-doodle-wrap.is-drawing,
+.interactive-doodle-wrap.is-drawn {
+  opacity: 0.72;
+  animation: doodleEntranceFade 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes doodleEntranceFade {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.88);
+  }
+  100% {
+    opacity: 0.72;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Hover opacity & prominence */
+.interactive-doodle-wrap:hover {
+  opacity: 1;
+}
+
+/* Accessibility focus ring */
+.interactive-doodle-wrap:focus-visible .doodle-spring-card {
+  outline: 2px dashed var(--deep-red);
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+
+/* ==========================================================================
+   LAYER 1: INDEPENDENT ORGANIC FLOATING ENGINE
+   Four distinct multi-axis floating curves so NO two doodles move together.
+   ========================================================================== */
+.doodle-float-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+}
+
+/* Float 1: Gentle vertical breathing & soft tilt */
+.doodle-float-container.float-gentle,
+.doodle-float-container.is-floating {
+  animation: doodleFloatGentle var(--float-dur, 7.2s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+/* Float 2: Wide organic 2D drift */
+.doodle-float-container.float-drift {
+  animation: doodleFloatDrift var(--float-dur, 8.4s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+/* Float 3: Smooth wave glide */
+.doodle-float-container.float-wave {
+  animation: doodleFloatWave var(--float-dur, 7.8s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+/* Float 4: Pendulum-like sway */
+.doodle-float-container.float-sway {
+  animation: doodleFloatSway var(--float-dur, 9.0s) ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+@keyframes doodleFloatGentle {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  30% {
+    transform: translate3d(0, -9px, 0) rotate(1.4deg);
+  }
+  70% {
+    transform: translate3d(0, -4px, 0) rotate(-1.2deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+@keyframes doodleFloatDrift {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(6px, -8px, 0) rotate(1.6deg);
+  }
+  50% {
+    transform: translate3d(-4px, -13px, 0) rotate(-1.2deg);
+  }
+  75% {
+    transform: translate3d(-5px, -5px, 0) rotate(-1.8deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+@keyframes doodleFloatWave {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  33% {
+    transform: translate3d(-6px, -11px, 0) rotate(-1.6deg);
+  }
+  66% {
+    transform: translate3d(5px, -6px, 0) rotate(1.4deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+@keyframes doodleFloatSway {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  35% {
+    transform: translate3d(4px, -7px, 0) rotate(2deg);
+  }
+  70% {
+    transform: translate3d(-4px, -10px, 0) rotate(-2deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+/* ==========================================================================
+   LAYER 2: TACTILE SPRING CARD (Hover lift, spring click recoil, 3D tilt)
+   Completely GPU-accelerated via CSS custom properties; no frame drops.
+   ========================================================================== */
+.doodle-spring-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: perspective(600px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.28s ease,
+    color 0.25s ease;
+  will-change: transform, filter;
+  filter: drop-shadow(0 2px 5px rgba(39, 7, 7, 0.08));
+}
+
+.interactive-doodle-wrap:hover .doodle-spring-card,
+.doodle-spring-card.is-hovered {
+  color: var(--deep-red);
+  transform: perspective(600px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) scale(1.12) translateY(-4px);
+  filter: drop-shadow(0 12px 24px rgba(102, 8, 16, 0.28));
+}
+
+.interactive-doodle-wrap:active .doodle-spring-card,
+.doodle-spring-card.is-pressed {
+  transform: perspective(600px) scale(0.92) translateY(1px);
+  filter: drop-shadow(0 3px 8px rgba(102, 8, 16, 0.35));
+  transition: transform 0.08s ease;
+}
+
+.doodle-spring-card.is-active {
+  transform: perspective(600px) scale(0.94) rotate(1deg);
+  filter: drop-shadow(0 4px 10px rgba(102, 8, 16, 0.4));
+  transition: transform 0.12s ease;
+}
+
+/* SVG Vector base styling */
+.doodle-svg {
+  display: block;
+  overflow: visible;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 1px 1.5px rgba(39, 7, 7, 0.06));
+}
+
+/* ==========================================================================
+   CAMERA VIEWFINDER HUD (Appears cleanly below camera on hover)
+   ========================================================================== */
+.doodle-cam-hud {
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 30;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.2s;
+}
+
+.interactive-doodle-wrap:hover .doodle-cam-hud,
+.interactive-doodle-wrap:focus-visible .doodle-cam-hud,
+.doodle-cam-hud.is-active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.hud-pill {
+  background: var(--dark-red);
+  color: var(--stone);
+  font-family: var(--font-body);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(39, 7, 7, 0.25);
+}
+
+.hud-pill.exp {
+  background: var(--deep-red);
+  color: #ffffff;
+}
+
+.hud-pill-mute {
+  cursor: pointer;
+  pointer-events: auto;
+  padding: 1.5px 6px;
+  background: rgba(39, 7, 7, 0.88);
+  border: none;
+  font-size: 9px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.hud-pill-mute:hover {
+  background: var(--deep-red);
+  transform: scale(1.15);
+}
+
+/* Flash halo burst on camera shutter click */
+.doodle-shutter-flash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 130%;
+  height: 130%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 235, 235, 0.82) 28%,
+    rgba(102, 8, 16, 0.35) 54%,
+    transparent 74%
+  );
+  pointer-events: none;
+  z-index: 10;
+  animation: shutterFlashBurst 0.26s ease-out forwards;
+}
+
+@keyframes shutterFlashBurst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.6);
+  }
+}
+
+/* Autofocus targeting reticle on Lens */
+.doodle-af-reticle {
+  position: absolute;
+  inset: -10px;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.95);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s;
+}
+
+.interactive-doodle-wrap:hover .doodle-af-reticle,
+.interactive-doodle-wrap:focus-visible .doodle-af-reticle,
+.doodle-af-reticle.is-hover {
+  opacity: 0.85;
+  visibility: visible;
+  transform: scale(1.02);
+}
+
+.doodle-af-reticle.is-locked {
+  opacity: 1;
+  visibility: visible;
+  animation: afReticlePulse 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.af-bracket {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--deep-red);
+  border-style: solid;
+  border-width: 0;
+}
+.af-tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+.af-tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; }
+.af-bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; }
+.af-br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+
+.af-label {
+  position: absolute;
+  bottom: -18px;
+  background: var(--deep-red);
+  color: var(--stone);
+  font-family: var(--font-body);
+  font-size: 8px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.8px;
+  box-shadow: 0 2px 6px rgba(102, 8, 16, 0.35);
+  white-space: nowrap;
+}
+
+@keyframes afReticlePulse {
+  0% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+/* "CLICK IT!" Invitation Wiggle */
+.interactive-doodle-wrap.type-click .doodle-speech-click {
+  animation: clickBeckonWiggle 4.6s ease-in-out infinite;
+}
+
+@keyframes clickBeckonWiggle {
+  0%, 80%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  83% {
+    transform: rotate(-4deg) scale(1.08);
+  }
+  87% {
+    transform: rotate(4deg) scale(1.08);
+  }
+  91% {
+    transform: rotate(-2deg) scale(1.04);
+  }
+  95% {
+    transform: rotate(1deg) scale(1.02);
+  }
+}
+
+/* ==========================================================================
+   DYNAMIC PARTICLES (Collectible Mini Polaroid snapshot, notes, hearts, sparkles)
+   ========================================================================== */
+.doodle-particle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 1;
+}
+
+/* 1. Collectible Mini Polaroid Snapshot */
+.particle-snapshot {
+  top: -6px;
+  left: 50%;
+  transform: translate(-50%, -32px);
+  animation: polaroidEject 2.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.mini-snapshot-card {
+  background: #ffffff;
+  border: 1.5px solid var(--dark-red);
+  border-radius: 4px;
+  padding: 4px 4px 5px;
+  box-shadow: 0 14px 32px rgba(39, 7, 7, 0.38), 0 2px 8px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 36px;
+  transform-style: preserve-3d;
+}
+
+.mini-photo-inner {
+  background: var(--stone);
+  border-radius: 2px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dark-red);
+  border: 1px solid rgba(39, 7, 7, 0.15);
+  overflow: hidden;
+}
+
+.mini-snapshot-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.mini-snapshot-label {
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  letter-spacing: 0.8px;
+  color: var(--deep-red);
+  line-height: 1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mini-snapshot-sub {
+  font-family: var(--font-body);
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  color: var(--dark-red);
+  opacity: 0.75;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* 2. Badge Particle */
+.particle-badge {
+  top: -10px;
+  left: 50%;
+  transform: translate(-50%, -46px);
+  animation: badgePop 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.particle-badge span {
+  background: var(--deep-red);
+  color: var(--stone);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.8px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: bold;
+  box-shadow: 0 6px 18px rgba(102, 8, 16, 0.38);
+  white-space: nowrap;
+}
+
+/* 3. Musical Note */
+.particle-note {
+  top: -8px;
+  left: 50%;
+  transform: translate(-50%, -46px);
+  animation: noteFloat 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.particle-note span {
+  font-size: 22px;
+  color: var(--deep-red);
+  font-weight: bold;
+  filter: drop-shadow(0 2px 6px rgba(102, 8, 16, 0.4));
+}
+
+/* 4. Heart Particle */
+.particle-heart {
+  top: -8px;
+  left: 50%;
+  transform: translate(-50%, -46px);
+  animation: heartFloat 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* 5. Sparkle Particle */
+.particle-sparkle {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: sparkleBurst 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Snapping, pulsing, & popping micro-animations */
+.doodle-vintage-camera.is-snapping,
+.doodle-dslr.is-snapping,
+.doodle-telephoto-angled.is-snapping,
+.doodle-telephoto-horizontal.is-snapping,
+.doodle-compact-camera.is-snapping,
+.doodle-camera-flash.is-snapping {
+  transform: scale(0.92) rotate(-1deg);
+}
+
+.doodle-lens.is-focused .lens-iris-group {
+  transform: rotate(65deg) scale(0.92);
+}
+
+.doodle-heart-frame.is-pulsing .heart-path,
+.doodle-heart-frame:hover .heart-path {
+  animation: doubleHeartbeat 0.8s ease-in-out infinite;
+}
+
+.doodle-star.is-twinkling,
+.doodle-sparkle.is-twinkling {
+  animation: doodleStarSpin 0.65s ease-in-out;
+}
+
+.doodle-bird.is-chirping {
+  animation: doodleBirdHop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.doodle-speech-click.is-popping,
+.doodle-speech-smile.is-popping {
+  animation: doodleJellyPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.doodle-film-strip:hover {
+  transform: scale(1.08) rotate(2deg);
+}
+
+/* Keyframe animations for particles */
+@keyframes polaroidEject {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.3) rotate(0deg);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -34px) scale(1.12) rotate(var(--p-rot, -4deg));
+  }
+  28% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -30px) scale(1) rotate(var(--p-rot, -4deg));
+  }
+  78% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -32px) scale(1) rotate(var(--p-rot, -4deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -54px) scale(0.85) rotate(calc(var(--p-rot, -4deg) * 1.5));
+  }
+}
+
+@keyframes badgePop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.4);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -44px) scale(1.1) rotate(var(--p-rot, -3deg));
+  }
+  30% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -46px) scale(1) rotate(var(--p-rot, -3deg));
+  }
+  75% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -48px) scale(1) rotate(var(--p-rot, -3deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -72px) scale(0.8);
+  }
+}
+
+@keyframes noteFloat {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -38px) scale(1.2) rotate(var(--p-rot, -15deg));
+  }
+  75% {
+    opacity: 0.95;
+    transform: translate(calc(-50% + var(--p-dx, 0px) * 1.2), -58px) scale(1) rotate(var(--p-rot, -15deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--p-dx, 0px) * 1.5), -82px) scale(0.7);
+  }
+}
+
+@keyframes heartFloat {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.4);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), -38px) scale(1.25) rotate(var(--p-rot, 12deg));
+  }
+  80% {
+    opacity: 0.9;
+    transform: translate(calc(-50% + var(--p-dx, 0px) * 1.2), -60px) scale(1) rotate(var(--p-rot, 12deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--p-dx, 0px) * 1.5), -84px) scale(0.7);
+  }
+}
+
+@keyframes sparkleBurst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+  }
+  35% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--p-dx, 0px)), calc(-50% + var(--p-dy, 0px))) scale(1.3) rotate(var(--p-rot, 45deg));
+  }
+  80% {
+    opacity: 0.85;
+    transform: translate(calc(-50% + var(--p-dx, 0px) * 1.2), calc(-50% + var(--p-dy, 0px) * 1.2)) scale(1) rotate(var(--p-rot, 45deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--p-dx, 0px) * 1.4), calc(-50% + var(--p-dy, 0px) * 1.4)) scale(0.2);
+  }
+}
+
+@keyframes doubleHeartbeat {
+  0%, 100% { transform: scale(1); }
+  20% { transform: scale(1.24); }
+  40% { transform: scale(1.06); }
+  60% { transform: scale(1.3); }
+  80% { transform: scale(1.04); }
+}
+
+@keyframes doodleStarSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(72deg) scale(1.24); }
+  100% { transform: rotate(144deg) scale(1); }
+}
+
+@keyframes doodleBirdHop {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-12px) scale(1.12) rotate(-5deg); }
+  65% { transform: translateY(-5px) scale(1.04) rotate(3deg); }
+  100% { transform: translateY(0) scale(1) rotate(0deg); }
+}
+
+@keyframes doodleJellyPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.2) rotate(-3deg); }
+  65% { transform: scale(0.94) rotate(2deg); }
+  85% { transform: scale(1.04) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* ==========================================================================
+   COMBO CTA DOODLES
+   ========================================================================== */
+.combo-doodles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.combo-cyprus .combo-doodles {
+  color: var(--stone);
+  opacity: 0.38;
+}
+
+.combo-sand .combo-doodles {
+  color: var(--dark-red);
+  opacity: 0.35;
+}
+
+.combo-doodles .cd {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s, color 0.3s;
+}
+
+.combo-doodles .cd:hover {
+  transform: scale(1.16) rotate(-2deg);
+  opacity: 0.98;
+  color: var(--deep-red);
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN & CLEAN SEPARATION
+   ========================================================================== */
+
+/* Tablets (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .interactive-doodle-body {
+    transform: scale(0.88);
+    transform-origin: center;
+  }
+  .interactive-doodle-wrap {
+    opacity: 0.62;
+  }
+}
+
+/* Mobile Devices (max-width: 768px) */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+
+  .interactive-doodle-body {
+    transform: scale(0.75);
+    transform-origin: center;
+  }
+
+  .interactive-doodle-wrap {
+    opacity: 0.55;
+  }
+
+  /* Keep hero doodles well clear of all touch targets, buttons, and titles */
+  .ds-hero-click {
+    top: 70% !important;
+    left: 4% !important;
+  }
+  .ds-hero-flash {
+    display: none !important;
+  }
+  .ds-hero-vintage {
+    display: none !important;
+  }
+  .ds-hero-dslr {
+    top: 68% !important;
+    right: 4% !important;
+  }
+  .ds-hero-bird {
+    bottom: 3% !important;
+    left: 4% !important;
+  }
+  .ds-hero-heart {
+    bottom: 3% !important;
+    right: 4% !important;
+  }
+}
+
+/* Extra small mobile (max-width: 480px) */
+@media (max-width: 480px) {
+  .interactive-doodle-body {
+    transform: scale(0.68);
+    transform-origin: center;
+  }
+}
+
+/* ==========================================================================
+   PREFERS-REDUCED-MOTION
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .interactive-doodle-wrap,
+  .doodle-float-container,
+  .doodle-float-container.is-floating,
+  .doodle-float-container.float-gentle,
+  .doodle-float-container.float-drift,
+  .doodle-float-container.float-wave,
+  .doodle-float-container.float-sway,
+  .doodle-spring-card,
+  .combo-doodles .cd,
+  .doodle-star.is-twinkling,
+  .doodle-bird.is-chirping,
+  .doodle-speech-click.is-popping,
+  .doodle-particle {
+    animation: none !important;
+    transition: opacity 0.2s linear, color 0.2s linear !important;
+  }
+  .doodle-shutter-flash {
+    display: none !important;
+  }
+}

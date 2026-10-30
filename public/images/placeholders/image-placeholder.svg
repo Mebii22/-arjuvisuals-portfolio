@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" fill="none">
+  <rect width="1200" height="900" fill="#270707"/>
+  <!-- Framing corners -->
+  <path d="M60 120 V60 H120" stroke="#F1EBEB" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1140 120 V60 H1080" stroke="#F1EBEB" stroke-width="3" stroke-linecap="round"/>
+  <path d="M60 780 V840 H120" stroke="#F1EBEB" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1140 780 V840 H1080" stroke="#F1EBEB" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Subtle center grid -->
+  <line x1="400" y1="60" x2="400" y2="840" stroke="#660810" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+  <line x1="800" y1="60" x2="800" y2="840" stroke="#660810" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+  <line x1="60" y1="300" x2="1140" y2="300" stroke="#660810" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+  <line x1="60" y1="600" x2="1140" y2="600" stroke="#660810" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+
+  <!-- Center camera icon -->
+  <g transform="translate(520, 360)">
+    <rect x="10" y="26" width="140" height="96" rx="18" fill="#270707" stroke="#F1EBEB" stroke-width="4"/>
+    <path d="M46 26 L58 10 L102 10 L114 26 Z" fill="#270707" stroke="#F1EBEB" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="80" cy="74" r="34" fill="#1E0505" stroke="#F1EBEB" stroke-width="4"/>
+    <circle cx="80" cy="74" r="18" fill="#660810" stroke="#F1EBEB" stroke-width="3"/>
+    <circle cx="80" cy="74" r="7" fill="#F1EBEB"/>
+    <circle cx="128" cy="46" r="6" fill="#8A2630"/>
+  </g>
+
+  <!-- Typography -->
+  <text x="600" y="540" text-anchor="middle" font-family="'Outfit', Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="4" fill="#F1EBEB">ARJU VISUALS · CO</text>
+  <text x="600" y="580" text-anchor="middle" font-family="'Outfit', Arial, sans-serif" font-size="18" font-weight="400" letter-spacing="2" fill="#B8AAAA">PHOTOGRAPHIC FRAME IN PRODUCTION</text>
+  <text x="600" y="615" text-anchor="middle" font-family="'Outfit', Arial, sans-serif" font-size="14" font-weight="300" letter-spacing="1.5" fill="#7A6868">Original capture by Arjun Murali will replace this frame</text>
+</svg>
