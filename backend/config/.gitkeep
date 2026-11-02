@@ -1,0 +1,3 @@
+# config/
+# Database connection and external service configuration files (e.g., db.js, cloudinary.js)
+
