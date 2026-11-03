@@ -1,34 +1,37 @@
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const connectDB = require("./config/db");
+const authRoutes = require("./routes/authRoutes");
 
-// Load environment variables from .env
+// Load environment variables
 dotenv.config();
 
-// Initialize express app
-const app = express();
-const PORT = process.env.PORT || 5001;
+// Connect MongoDB
+connectDB();
 
-// Enable Cross-Origin Resource Sharing (allows Vite frontend to communicate with Express)
+const app = express();
+
+// Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
   credentials: true
 }));
 
-// Body parser middleware (allows Express to read incoming JSON requests)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use("/api/auth", authRoutes);
 
-// Basic test/health-check route
-app.get('/', (req, res) => {
+// Test route
+app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'ArjuVisuals API is running successfully'
+    message: "ArjuVisuals API is running successfully"
   });
 });
 
-// Start listening for incoming requests
-app.listen(PORT, () => {
-  console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
+const PORT = process.env.PORT || 5001;
 
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
