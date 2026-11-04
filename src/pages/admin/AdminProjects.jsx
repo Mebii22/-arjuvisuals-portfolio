@@ -15,6 +15,7 @@ export default function AdminProjects() {
   const [cat, setCat] = useState("all");
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [confirm, setConfirm] = useState(null);
+  const [migrating, setMigrating] = useState(false);
 
   const load = () => projectService.list({ includeDrafts: true }).then(setProjects);
 
@@ -69,23 +70,35 @@ export default function AdminProjects() {
   }, [projects, q, typeFilter, cat, statusFilter]);
 
   const publishProject = async (p) => {
-    await projectService.publish(p.id);
-    toast.push(`Project “${p.title}” is now published and live.`);
-    load();
+    try {
+      await projectService.publish(p.id || p._id);
+      toast.push(`Project “${p.title}” is now published and live.`);
+      await load();
+    } catch (err) {
+      toast.push(err.message || "Could not publish project.", "err");
+    }
   };
 
   const unpublishProject = async (p) => {
-    await projectService.unpublish(p.id);
-    toast.push(`Project “${p.title}” unpublished and moved to drafts.`);
-    load();
+    try {
+      await projectService.unpublish(p.id || p._id);
+      toast.push(`Project “${p.title}” unpublished and moved to drafts.`);
+      await load();
+    } catch (err) {
+      toast.push(err.message || "Could not unpublish project.", "err");
+    }
   };
 
   const toggleFeatured = async (p) => {
-    await projectService.update(p.id, {
-      featured: !p.featured,
-    });
-    toast.push(`Project ${!p.featured ? "marked as featured" : "removed from featured"}.`);
-    load();
+    try {
+      await projectService.update(p.id || p._id, {
+        featured: !p.featured,
+      });
+      toast.push(`Project ${!p.featured ? "marked as featured" : "removed from featured"}.`);
+      await load();
+    } catch (err) {
+      toast.push(err.message || "Could not update featured status.", "err");
+    }
   };
 
   const remove = async (id) => {
@@ -95,14 +108,45 @@ export default function AdminProjects() {
     load();
   };
 
+  const handleMigrate = async () => {
+    setMigrating(true);
+    try {
+      const res = await projectService.migrateFromLocalStorage();
+      if (res.imported > 0) {
+        toast.push(`Successfully imported ${res.imported} project${res.imported > 1 ? "s" : ""} to database.`);
+      } else if (res.skipped > 0) {
+        toast.push("Existing projects are already imported in database.");
+      } else {
+        toast.push("No projects found to import.");
+      }
+      await load();
+    } catch (err) {
+      toast.push(err.message || "Migration failed.", "err");
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   return (
     <>
       <SEO title="Projects" />
       <div className="admin-top">
         <h1>PROJECTS</h1>
-        <Link to="/admin/projects/new" className="btn btn-sand">
-          + Add project
-        </Link>
+        <div style={{ display: "flex", gap: "0.8rem", alignItems: "center" }}>
+          {counts.total === 0 && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleMigrate}
+              disabled={migrating}
+            >
+              {migrating ? "Importing..." : "Import Existing Projects"}
+            </button>
+          )}
+          <Link to="/admin/projects/new" className="btn btn-sand">
+            + Add project
+          </Link>
+        </div>
       </div>
 
       <div className="demo-banner">

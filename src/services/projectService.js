@@ -255,18 +255,28 @@ export const mapBackendToFrontend = (b) => {
     ? b.images
     : (Array.isArray(b.gallery) && b.gallery.length > 0 ? b.gallery : [cover].filter(Boolean));
 
+  // Determine display category from subCategory, legacy map, or default
+  const slugKey = b.slug || (b.title ? projectService.slugify(b.title) : id);
+  const matchedInfo =
+    LEGACY_PROJECT_INFO[slugKey] ||
+    LEGACY_PROJECT_INFO[id] ||
+    LEGACY_PROJECT_INFO[b.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-")];
+
+  let category = b.subCategory || (matchedInfo ? matchedInfo.category : null);
+  if (!category || category === "photography" || category === "videography") {
+    category = isVideo ? "Cinematic Films" : "Wedding Photography";
+  }
+
   return {
     ...b,
     id,
     _id: id,
     title: b.title || "",
-    slug: b.slug || (b.title ? projectService.slugify(b.title) : id),
+    slug: slugKey,
     description: b.description || b.short || "",
     short: b.short || b.description || "",
     type,
-    category: b.category && b.category !== "photography" && b.category !== "videography"
-      ? b.category
-      : (isVideo ? "Cinematic Films" : "Wedding Photography"),
+    category,
     cover,
     coverImage: cover,
     gallery,
@@ -277,31 +287,73 @@ export const mapBackendToFrontend = (b) => {
     location: b.location || "",
     shootDate: b.shootDate || "",
     duration: b.duration || "",
-    videoProvider: b.videoProvider || "auto",
+    videoProvider: b.videoProvider || (b.videoUrl && b.videoUrl.includes("vimeo") ? "vimeo" : "youtube"),
   };
 };
 
 export const mapFrontendToBackend = (f) => {
   if (!f) return {};
-  const isVideo = f.type === "videography" || (typeof f.category === "string" && f.category.toLowerCase().includes("video"));
-  const coverImage = f.coverImage || f.cover || "";
-  const images = Array.isArray(f.images) && f.images.length > 0
-    ? f.images
-    : (Array.isArray(f.gallery) && f.gallery.length > 0 ? f.gallery : [coverImage].filter(Boolean));
+  const mapped = {};
 
-  return {
-    title: f.title ? f.title.trim() : "",
-    description: (f.description || f.short || f.title || "").trim(),
-    category: isVideo ? "videography" : "photography",
-    coverImage: coverImage.trim() || (isVideo ? "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4" : "https://images.unsplash.com/photo-1519741497674-611481863552"),
-    images,
-    status: f.status === "published" ? "published" : "draft",
-    featured: Boolean(f.featured),
-    videoUrl: f.videoUrl || "",
-    slug: f.slug || (f.title ? projectService.slugify(f.title) : ""),
-    location: f.location || "",
-    short: f.short || "",
-  };
+  if (f.title !== undefined) {
+    mapped.title = String(f.title).trim();
+  }
+  if (f.description !== undefined || f.short !== undefined) {
+    mapped.description = String(f.description || f.short || f.title || "").trim();
+  }
+  if (f.type !== undefined || f.category !== undefined) {
+    const isVideo =
+      f.type === "videography" ||
+      (typeof f.category === "string" && f.category.toLowerCase().includes("video"));
+    mapped.category = isVideo ? "videography" : "photography";
+    if (f.category && f.category !== "photography" && f.category !== "videography") {
+      mapped.subCategory = f.category;
+    }
+  }
+  if (f.coverImage !== undefined || f.cover !== undefined) {
+    const isVideo =
+      f.type === "videography" ||
+      (typeof f.category === "string" && f.category.toLowerCase().includes("video"));
+    const coverImage = f.coverImage || f.cover || "";
+    mapped.coverImage =
+      coverImage.trim() ||
+      (isVideo
+        ? "/images/projects/nature-photography/cover.jpg"
+        : "/images/projects/wedding-photography/cover.jpg");
+  }
+  if (f.images !== undefined || f.gallery !== undefined) {
+    mapped.images =
+      Array.isArray(f.images) && f.images.length > 0
+        ? f.images
+        : Array.isArray(f.gallery) && f.gallery.length > 0
+        ? f.gallery
+        : [mapped.coverImage || f.coverImage || f.cover].filter(Boolean);
+  }
+  if (f.status !== undefined) {
+    mapped.status = f.status === "published" ? "published" : "draft";
+  }
+  if (f.featured !== undefined) {
+    mapped.featured = Boolean(f.featured);
+  }
+  if (f.videoUrl !== undefined) {
+    mapped.videoUrl = f.videoUrl;
+  }
+  if (f.slug !== undefined) {
+    mapped.slug = f.slug;
+  } else if (f.title !== undefined) {
+    mapped.slug = projectService.slugify(f.title);
+  }
+  if (f.location !== undefined) {
+    mapped.location = f.location;
+  }
+  if (f.short !== undefined) {
+    mapped.short = f.short;
+  }
+  if (f.subCategory !== undefined) {
+    mapped.subCategory = f.subCategory;
+  }
+
+  return mapped;
 };
 
 export const projectService = {
@@ -345,17 +397,41 @@ export const projectService = {
    */
   async getBySlugAny(slug) {
     if (API_CONFIG.USE_API) {
-      // 1. If slug is a valid 24-char MongoDB ObjectId, query by ID
+      // 1. If slug is a valid 24-char MongoDB ObjectId, query by ID directly
       if (/^[0-9a-fA-F]{24}$/.test(slug)) {
         const item = await this.getById(slug);
         if (item) return item;
       }
-      // 2. Fetch projects and match by slug, id, or slugified title
-      const all = await this.list({ includeDrafts: true });
-      return (
-        all.find((p) => p.slug === slug || p.id === slug || this.slugify(p.title) === slug) ||
-        null
-      );
+
+      // 2. Search public published projects first (no admin token required)
+      try {
+        const pubProjects = await this.list({ includeDrafts: false });
+        const matched = pubProjects.find(
+          (p) => p.slug === slug || p.id === slug || this.slugify(p.title) === slug
+        );
+        if (matched) return matched;
+      } catch {
+        // Fall through
+      }
+
+      // 3. If not found in public and admin session token exists, query admin projects (allows draft preview)
+      const token =
+        typeof sessionStorage !== "undefined"
+          ? sessionStorage.getItem("arjuvisuals.adminSession")
+          : null;
+      if (token && token !== "prototype") {
+        try {
+          const adminProjects = await this.list({ includeDrafts: true });
+          const matchedAdmin = adminProjects.find(
+            (p) => p.slug === slug || p.id === slug || this.slugify(p.title) === slug
+          );
+          if (matchedAdmin) return matchedAdmin;
+        } catch {
+          // Fall through
+        }
+      }
+
+      return null;
     }
     return local.all().find((p) => p.slug === slug) || null;
   },
@@ -435,6 +511,56 @@ export const projectService = {
     }
     local.save(local.all().filter((p) => p.id !== id));
     return true;
+  },
+
+  async migrateFromLocalStorage() {
+    if (!API_CONFIG.USE_API) return { success: false, message: "API is not enabled" };
+
+    // 1. Fetch current backend projects to avoid duplicates
+    const currentBackend = await this.list({ includeDrafts: true });
+    const existingTitles = new Set(
+      (currentBackend || []).map((p) => (p.title || "").toLowerCase().trim())
+    );
+    const existingSlugs = new Set(
+      (currentBackend || [])
+        .map((p) => (p.slug || "").toLowerCase().trim())
+        .filter(Boolean)
+    );
+
+    // 2. Read from localStorage (fallback to defaultProjects)
+    const rawLocal = storage.read(KEYS.projects, defaultProjects);
+    const sourceList =
+      Array.isArray(rawLocal) && rawLocal.length > 0 ? rawLocal : defaultProjects;
+
+    const results = {
+      imported: 0,
+      skipped: 0,
+      errors: [],
+    };
+
+    for (const item of sourceList) {
+      if (!item || item.id === "p-open-face" || item.slug === "open-face") continue;
+
+      const title = (item.title || "").toLowerCase().trim();
+      const slug = (item.slug || this.slugify(item.title) || "").toLowerCase().trim();
+
+      // Check if project already exists on the backend
+      if (existingTitles.has(title) || (slug && existingSlugs.has(slug))) {
+        results.skipped++;
+        continue;
+      }
+
+      try {
+        await this.create(item);
+        existingTitles.add(title);
+        if (slug) existingSlugs.add(slug);
+        results.imported++;
+      } catch (err) {
+        results.errors.push({ title: item.title, error: err.message });
+      }
+    }
+
+    return results;
   },
 
   slugify(title) {

@@ -57,6 +57,11 @@ export default function ProjectDetails() {
         if (on) setPlayableVideoUrl(resolved);
       }
       setLoading(false);
+    }).catch(() => {
+      if (on) {
+        setNotFound(true);
+        setLoading(false);
+      }
     });
     return () => {
       on = false;

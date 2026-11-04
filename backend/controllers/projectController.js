@@ -8,7 +8,7 @@ const Project = require("../models/Project");
  */
 const addProject = async (req, res) => {
   try {
-    const { title, description, category, coverImage, images, status, featured, videoUrl, slug, location, short } = req.body;
+    const { title, description, category, coverImage, images, status, featured, videoUrl, slug, location, short, subCategory } = req.body;
 
     // Validate required fields
     if (!title || !description || !category || !coverImage) {
@@ -31,6 +31,7 @@ const addProject = async (req, res) => {
       slug: slug || "",
       location: location || "",
       short: short || "",
+      subCategory: subCategory || "",
     });
 
     res.status(201).json({

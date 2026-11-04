@@ -40,7 +40,6 @@ const local = {
 
 export const serviceService = {
   async list({ includeHidden = false } = {}) {
-    if (API_CONFIG.USE_API) return apiRequest("/services");
     const all = local.all();
     return includeHidden ? all : all.filter((s) => s.published);
   },
@@ -48,31 +47,16 @@ export const serviceService = {
     return local.all().find((s) => s.id === id) || null;
   },
   async create(payload) {
-    if (API_CONFIG.USE_API) {
-      return apiRequest("/services", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-    }
     const item = { ...payload, id: payload.id || `s-${Date.now()}` };
     local.save([item, ...local.all()]);
     return item;
   },
   async update(id, payload) {
-    if (API_CONFIG.USE_API) {
-      return apiRequest(`/services/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-    }
     const next = local.all().map((s) => (s.id === id ? { ...s, ...payload, id } : s));
     local.save(next);
     return next.find((s) => s.id === id);
   },
   async remove(id) {
-    if (API_CONFIG.USE_API) {
-      return apiRequest(`/services/${id}`, { method: "DELETE" });
-    }
     local.save(local.all().filter((s) => s.id !== id));
     return true;
   },

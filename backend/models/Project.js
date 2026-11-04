@@ -61,6 +61,10 @@ const projectSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    subCategory: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true, // Automatically manages createdAt and updatedAt
