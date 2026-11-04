@@ -23,7 +23,14 @@ if (!existingProfile || hasLegacyProfile || needsContactInit) {
 
 export const profileService = {
   async get() {
-    if (API_CONFIG.USE_API) return apiRequest("/profile");
+    if (API_CONFIG.USE_API) {
+      try {
+        const res = await apiRequest("/profile");
+        if (res) return res?.data || res;
+      } catch {
+        // Fall back gracefully to stored profile
+      }
+    }
     const stored = storage.read(KEYS.profile, defaultProfile);
     return {
       ...defaultProfile,
@@ -44,10 +51,15 @@ export const profileService = {
   },
   async update(payload) {
     if (API_CONFIG.USE_API) {
-      return apiRequest("/profile", {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
+      try {
+        const res = await apiRequest("/profile", {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        if (res) return res?.data || res;
+      } catch {
+        // Fall back gracefully to local storage update
+      }
     }
     // Cross-sync backwards compatible aliases
     const synced = {

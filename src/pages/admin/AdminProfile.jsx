@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import SEO from "../../components/SEO";
 import { profileService } from "../../services/profileService";
 import { defaultProfile } from "../../data/photographer";
+import { API_CONFIG, apiRequest } from "../../services/api";
 import { useToast } from "../../context/ToastContext";
 import { compressImageFile } from "../../utils/imageUtils";
 
@@ -18,9 +19,21 @@ export default function AdminProfile() {
   const handlePhotoUpload = async (field, file, label) => {
     if (!file) return;
     try {
-      const dataUrl = await compressImageFile(file, 1600, 1600, 0.85);
-      set(field, dataUrl);
-      toast.push(`${label} preview updated — click Save profile to keep.`);
+      if (API_CONFIG.USE_API) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await apiRequest("/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const url = res.url || (res.data && res.data.url);
+        set(field, url);
+        toast.push(`${label} preview updated — click Save profile to keep.`);
+      } else {
+        const dataUrl = await compressImageFile(file, 1600, 1600, 0.85);
+        set(field, dataUrl);
+        toast.push(`${label} preview updated — click Save profile to keep.`);
+      }
     } catch {
       toast.push(`Could not process ${label}.`, "err");
     }

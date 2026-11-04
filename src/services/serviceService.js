@@ -14,17 +14,27 @@ const normalizeServicePath = (s) => {
   return { ...s, cover };
 };
 
-const existingServices = storage.read(KEYS.services, null);
-const hasLegacyServices =
-  Array.isArray(existingServices) &&
-  existingServices.some(
-    (s) => typeof s.cover === "string" && s.cover.includes("pexels.com")
-  );
-if (!existingServices || hasLegacyServices) {
-  storage.write(KEYS.services, defaultServices);
-} else {
-  storage.write(KEYS.services, existingServices.map(normalizeServicePath));
-}
+const mapBackendToFrontend = (s) => {
+  if (!s) return null;
+  const isPublished = s.status === "published" || s.published === true;
+  return {
+    id: s._id || s.id,
+    _id: s._id || s.id,
+    title: s.title || "",
+    slug: s.slug || "",
+    description: s.description || "",
+    category: s.category || "photography",
+    status: isPublished ? "published" : "draft",
+    published: isPublished,
+    cover: s.cover || "",
+    features: Array.isArray(s.features) ? s.features : [],
+    startingPrice: s.startingPrice || "",
+    featured: Boolean(s.featured),
+    order: s.order || 0,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+  };
+};
 
 const local = {
   all() {
@@ -39,25 +49,96 @@ const local = {
 };
 
 export const serviceService = {
-  async list({ includeHidden = false } = {}) {
-    const all = local.all();
-    return includeHidden ? all : all.filter((s) => s.published);
+  async list({ includeHidden = false, status = "all", category = "all" } = {}) {
+    if (API_CONFIG.USE_API) {
+      try {
+        let endpoint = "/services";
+        const params = new URLSearchParams();
+        if (includeHidden) {
+          endpoint = "/services/admin/all";
+          if (status && status !== "all") params.set("status", status);
+        }
+        if (category && category !== "all") {
+          params.set("category", category);
+        }
+        const qs = params.toString();
+        if (qs) endpoint += `?${qs}`;
+
+        const res = await apiRequest(endpoint);
+        const rawList = Array.isArray(res) ? res : res && res.data ? res.data : [];
+        return rawList.map(mapBackendToFrontend);
+      } catch (err) {
+        console.warn("API service listing failed, falling back to local storage:", err.message);
+      }
+    }
+
+    const all = local.all().map(mapBackendToFrontend);
+    let list = includeHidden ? all : all.filter((s) => s.published);
+    if (status && status !== "all") {
+      list = list.filter((s) => s.status === status);
+    }
+    if (category && category !== "all") {
+      list = list.filter((s) => s.category === category);
+    }
+    return list;
   },
+
   async getById(id) {
-    return local.all().find((s) => s.id === id) || null;
+    if (API_CONFIG.USE_API) {
+      try {
+        const res = await apiRequest(`/services/${id}`);
+        const raw = res && res.data ? res.data : res;
+        return mapBackendToFrontend(raw);
+      } catch (err) {
+        console.warn("API getById failed, checking local storage:", err.message);
+      }
+    }
+    const item = local.all().find((s) => s.id === id || s._id === id);
+    return item ? mapBackendToFrontend(item) : null;
   },
+
   async create(payload) {
+    if (API_CONFIG.USE_API) {
+      const res = await apiRequest("/services", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const created = res && res.data ? res.data : res;
+      return mapBackendToFrontend(created);
+    }
     const item = { ...payload, id: payload.id || `s-${Date.now()}` };
     local.save([item, ...local.all()]);
-    return item;
+    return mapBackendToFrontend(item);
   },
+
   async update(id, payload) {
+    if (API_CONFIG.USE_API) {
+      const res = await apiRequest(`/services/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      const updated = res && res.data ? res.data : res;
+      return mapBackendToFrontend(updated);
+    }
     const next = local.all().map((s) => (s.id === id ? { ...s, ...payload, id } : s));
     local.save(next);
-    return next.find((s) => s.id === id);
+    return mapBackendToFrontend(next.find((s) => s.id === id));
   },
+
+  async publish(id) {
+    return this.update(id, { status: "published", published: true });
+  },
+
+  async unpublish(id) {
+    return this.update(id, { status: "draft", published: false });
+  },
+
   async remove(id) {
-    local.save(local.all().filter((s) => s.id !== id));
+    if (API_CONFIG.USE_API) {
+      await apiRequest(`/services/${id}`, { method: "DELETE" });
+      return true;
+    }
+    local.save(local.all().filter((s) => s.id !== id && s._id !== id));
     return true;
   },
 };

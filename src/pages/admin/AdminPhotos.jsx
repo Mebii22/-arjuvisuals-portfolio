@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import SEO from "../../components/SEO";
 import { projectService } from "../../services/projectService";
+import { API_CONFIG, apiRequest } from "../../services/api";
 import { ALL_CATEGORIES, PHOTOGRAPHY_CATEGORIES, VIDEOGRAPHY_CATEGORIES } from "../../data/projects";
 import { normCategory } from "../../utils/projectFilters";
 import { useToast } from "../../context/ToastContext";
@@ -88,13 +89,29 @@ export default function AdminPhotos() {
 
     setUploading(true);
     try {
-      const items = await Promise.all(
-        files.map(async (file) => {
-          const dataUrl = await compressImageFile(file, 1600, 1600, 0.82);
-          return { name: file.name, size: file.size, dataUrl };
-        })
-      );
-      setStagedFiles((prev) => [...prev, ...items]);
+      if (API_CONFIG.USE_API) {
+        const items = await Promise.all(
+          files.map(async (file) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await apiRequest("/upload", {
+              method: "POST",
+              body: formData,
+            });
+            const url = res.url || (res.data && res.data.url);
+            return { name: file.name, size: file.size, dataUrl: url };
+          })
+        );
+        setStagedFiles((prev) => [...prev, ...items]);
+      } else {
+        const items = await Promise.all(
+          files.map(async (file) => {
+            const dataUrl = await compressImageFile(file, 1600, 1600, 0.82);
+            return { name: file.name, size: file.size, dataUrl };
+          })
+        );
+        setStagedFiles((prev) => [...prev, ...items]);
+      }
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch {
       toast.push("Could not process selected image file(s).", "err");

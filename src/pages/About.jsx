@@ -7,27 +7,26 @@ import InteractiveGallery from "../components/InteractiveGallery";
 import DoodleField from "../components/DoodleField";
 import { useProfile } from "../hooks/useProfile";
 import { projectService } from "../services/projectService";
+import { serviceService } from "../services/serviceService";
 import SoftwareSkills from "../components/SoftwareSkills";
 import AboutEditorialCollage from "../components/AboutEditorialCollage";
 import { formatWhatsAppUrl } from "../data/photographer";
 
-const SPECS = [
-  { n: "01", t: "Wedding", p: "Vows, glances, and the quiet in-between." },
-  { n: "02", t: "Portrait", p: "Faces, light, and unforced character." },
-  { n: "03", t: "Fashion", p: "Silhouette, textile, and editorial mood." },
-  { n: "04", t: "Event", p: "Energy of a room without the clutter." },
-  { n: "05", t: "Travel", p: "Place, weather, and the figure in it." },
-  { n: "06", t: "Nature", p: "Mist, canopy, water, monsoon green." },
-  { n: "07", t: "Product", p: "Objects with material honesty." },
+const NUMBER_WORDS = [
+  "ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT",
+  "NINE", "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN",
+  "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN", "TWENTY"
 ];
 
 export default function About() {
   const { profile } = useProfile();
   const [projects, setProjects] = useState([]);
+  const [services, setServices] = useState([]);
   const wa = formatWhatsAppUrl(profile.whatsapp);
 
   useEffect(() => {
-    projectService.list().then(setProjects);
+    projectService.list().then((list) => setProjects(list || []));
+    serviceService.list().then((list) => setServices(list || []));
   }, []);
 
   const paras = (profile.biography || "").split("\n").filter(Boolean);
@@ -113,31 +112,33 @@ export default function About() {
         </div>
       </section>
 
-      <section className="section" style={{ paddingTop: 0 }}>
-        <div className="container">
-          <p className="kicker" style={{ color: "var(--cyprus)" }}>
-            How I work
-          </p>
-          <h2 className="display" style={{ fontSize: "clamp(2.4rem, 6vw, 4.2rem)", margin: "0.4rem 0 1.6rem" }}>
-            SEVEN <span className="mark sm">SETS</span>
-          </h2>
-          <div className="spec-b">
-            {SPECS.map((s, i) => (
-              <motion.article
-                key={s.t}
-                initial={{ opacity: 0, y: 14 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
-              >
-                <span>{s.n}</span>
-                <h3>{s.t}</h3>
-                <p>{s.p}</p>
-              </motion.article>
-            ))}
+      {services.length > 0 && (
+        <section className="section" style={{ paddingTop: 0 }}>
+          <div className="container">
+            <p className="kicker" style={{ color: "var(--cyprus)" }}>
+              How I work
+            </p>
+            <h2 className="display" style={{ fontSize: "clamp(2.4rem, 6vw, 4.2rem)", margin: "0.4rem 0 1.6rem" }}>
+              {NUMBER_WORDS[services.length] || String(services.length)} <span className="mark sm">SETS</span>
+            </h2>
+            <div className="spec-b">
+              {services.map((s, i) => (
+                <motion.article
+                  key={s.id || s._id || s.slug || s.title}
+                  initial={{ opacity: 0, y: 14 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <span>{String(i + 1).padStart(2, "0")}</span>
+                  <h3>{s.title}</h3>
+                  <p>{s.description}</p>
+                </motion.article>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="section" style={{ background: "var(--white)", paddingTop: "1rem" }}>
         <div className="container">

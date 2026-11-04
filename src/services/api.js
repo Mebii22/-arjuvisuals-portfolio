@@ -5,7 +5,7 @@
  */
 export const API_CONFIG = {
   USE_API: true,
-  BASE_URL: import.meta.env.VITE_API_URL || "http://localhost:5001/api",
+  BASE_URL: (import.meta.env.VITE_API_URL || "http://localhost:5001/api").replace(/\/+$/, ""),
 };
 
 export async function apiRequest(path, options = {}) {

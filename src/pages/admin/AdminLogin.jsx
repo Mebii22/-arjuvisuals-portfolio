@@ -55,8 +55,7 @@ export default function AdminLogin() {
           </p>
 
           <div className="form-note" style={{ marginBottom: "1.2rem" }}>
-            Frontend prototype — this form does not verify a real password and is not secure.
-            A future Node.js / Express backend will authenticate the single authorised administrator.
+            Secure studio desk. Protected by JSON Web Token (JWT) administrator authentication.
           </div>
 
           <div className="field">

@@ -157,6 +157,33 @@ const getSingleProject = async (req, res) => {
       });
     }
 
+    // Direct URL access: if draft, only authenticated admin can view it
+    if (project.status !== "published") {
+      let isAuthedAdmin = false;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        try {
+          const jwt = require("jsonwebtoken");
+          const Admin = require("../models/Admin");
+          const token = authHeader.split(" ")[1];
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          const admin = await Admin.findById(decoded.id);
+          if (admin && admin.role === "admin") {
+            isAuthedAdmin = true;
+          }
+        } catch {
+          // Token invalid or expired
+        }
+      }
+
+      if (!isAuthedAdmin) {
+        return res.status(404).json({
+          success: false,
+          message: "Project not found or is currently private",
+        });
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: project,

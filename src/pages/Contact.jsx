@@ -42,15 +42,13 @@ export default function Contact() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
-  const [services, setServices] = useState(defaultServices);
+  const [services, setServices] = useState([]);
 
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   useEffect(() => {
     serviceService.list().then((list) => {
-      if (Array.isArray(list) && list.length > 0) {
-        setServices(list);
-      }
+      setServices(Array.isArray(list) ? list : []);
     });
   }, []);
 
@@ -403,8 +401,8 @@ export default function Contact() {
                       >
                         <option value="">Select a service…</option>
                         {services.map((s) => (
-                          <option key={s.id} value={s.title}>
-                            {s.title}
+                          <option key={s.id || s._id || s.title} value={s.title}>
+                            {s.title} {s.category ? `(${s.category === "videography" ? "Videography" : "Photography"})` : ""}
                           </option>
                         ))}
                       </select>

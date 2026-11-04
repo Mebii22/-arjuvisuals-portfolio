@@ -112,6 +112,9 @@ export default function AdminDashboard() {
         <Link to="/admin/projects" className="btn btn-outline" style={{ borderColor: "var(--sand)", color: "var(--sand)" }}>
           Manage projects
         </Link>
+        <Link to="/admin/services" className="btn btn-outline" style={{ borderColor: "var(--sand)", color: "var(--sand)" }}>
+          Manage services
+        </Link>
         <Link to="/admin/photographs" className="btn btn-outline" style={{ borderColor: "var(--sand)", color: "var(--sand)" }}>
           Manage photos & stills
         </Link>

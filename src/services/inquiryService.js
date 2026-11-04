@@ -17,7 +17,14 @@ const local = {
 
 export const inquiryService = {
   async list() {
-    if (API_CONFIG.USE_API) return apiRequest("/inquiries");
+    if (API_CONFIG.USE_API) {
+      try {
+        const res = await apiRequest("/inquiries");
+        return Array.isArray(res) ? res : res?.data || local.all();
+      } catch {
+        return local.all();
+      }
+    }
     return local.all();
   },
   async getById(id) {
@@ -25,10 +32,15 @@ export const inquiryService = {
   },
   async create(payload) {
     if (API_CONFIG.USE_API) {
-      return apiRequest("/inquiries", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      try {
+        const res = await apiRequest("/inquiries", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        return res?.data || res;
+      } catch {
+        // Fall back to local creation below
+      }
     }
     const item = {
       ...payload,
