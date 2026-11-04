@@ -11,7 +11,11 @@ const EMAIL_KEY = "arjuvisuals.adminEmail";
 
 export const authService = {
   isAuthed() {
-    return sessionStorage.getItem(FLAG) === "prototype";
+    return Boolean(sessionStorage.getItem(FLAG));
+  },
+
+  getToken() {
+    return sessionStorage.getItem(FLAG) || "";
   },
 
   async login({ email, password }) {

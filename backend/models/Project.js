@@ -45,6 +45,22 @@ const projectSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    videoUrl: {
+      type: String,
+      default: "",
+    },
+    slug: {
+      type: String,
+      default: "",
+    },
+    location: {
+      type: String,
+      default: "",
+    },
+    short: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true, // Automatically manages createdAt and updatedAt

@@ -91,7 +91,7 @@ export default function AdminProjects() {
   const remove = async (id) => {
     await projectService.remove(id);
     setConfirm(null);
-    toast.push("Project deleted from local storage.");
+    toast.push("Project deleted successfully.");
     load();
   };
 

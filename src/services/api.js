@@ -4,20 +4,34 @@
  * backend and Cloudinary uploads are ready.
  */
 export const API_CONFIG = {
-  USE_API: false,
-  BASE_URL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  USE_API: true,
+  BASE_URL: import.meta.env.VITE_API_URL || "http://localhost:5001/api",
 };
 
 export async function apiRequest(path, options = {}) {
+  const token = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("arjuvisuals.adminSession") : null;
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+
+  const headers = {
+    ...(!isFormData && { "Content-Type": "application/json" }),
+    ...(token && token !== "prototype" && { Authorization: `Bearer ${token}` }),
+    ...(options.headers || {}),
+  };
+
   const res = await fetch(`${API_CONFIG.BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
     ...options,
+    headers,
   });
+
   if (!res.ok) {
-    const err = new Error(`Request failed (${res.status})`);
+    let errorMsg = `Request failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data && data.message) errorMsg = data.message;
+    } catch {
+      // Keep default error message
+    }
+    const err = new Error(errorMsg);
     err.status = res.status;
     throw err;
   }

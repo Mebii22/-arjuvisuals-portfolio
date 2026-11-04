@@ -245,15 +245,84 @@ const local = {
  * - PUT    /api/projects/:id        -> Update project
  * - DELETE /api/projects/:id        -> Delete project
  */
+export const mapBackendToFrontend = (b) => {
+  if (!b) return null;
+  const id = b._id || b.id;
+  const isVideo = b.category === "videography" || b.type === "videography";
+  const type = isVideo ? "videography" : "photography";
+  const cover = b.coverImage || b.cover || "";
+  const gallery = Array.isArray(b.images) && b.images.length > 0
+    ? b.images
+    : (Array.isArray(b.gallery) && b.gallery.length > 0 ? b.gallery : [cover].filter(Boolean));
+
+  return {
+    ...b,
+    id,
+    _id: id,
+    title: b.title || "",
+    slug: b.slug || (b.title ? projectService.slugify(b.title) : id),
+    description: b.description || b.short || "",
+    short: b.short || b.description || "",
+    type,
+    category: b.category && b.category !== "photography" && b.category !== "videography"
+      ? b.category
+      : (isVideo ? "Cinematic Films" : "Wedding Photography"),
+    cover,
+    coverImage: cover,
+    gallery,
+    images: gallery,
+    status: b.status || "draft",
+    featured: Boolean(b.featured),
+    videoUrl: b.videoUrl || "",
+    location: b.location || "",
+    shootDate: b.shootDate || "",
+    duration: b.duration || "",
+    videoProvider: b.videoProvider || "auto",
+  };
+};
+
+export const mapFrontendToBackend = (f) => {
+  if (!f) return {};
+  const isVideo = f.type === "videography" || (typeof f.category === "string" && f.category.toLowerCase().includes("video"));
+  const coverImage = f.coverImage || f.cover || "";
+  const images = Array.isArray(f.images) && f.images.length > 0
+    ? f.images
+    : (Array.isArray(f.gallery) && f.gallery.length > 0 ? f.gallery : [coverImage].filter(Boolean));
+
+  return {
+    title: f.title ? f.title.trim() : "",
+    description: (f.description || f.short || f.title || "").trim(),
+    category: isVideo ? "videography" : "photography",
+    coverImage: coverImage.trim() || (isVideo ? "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4" : "https://images.unsplash.com/photo-1519741497674-611481863552"),
+    images,
+    status: f.status === "published" ? "published" : "draft",
+    featured: Boolean(f.featured),
+    videoUrl: f.videoUrl || "",
+    slug: f.slug || (f.title ? projectService.slugify(f.title) : ""),
+    location: f.location || "",
+    short: f.short || "",
+  };
+};
+
 export const projectService = {
   async list({ includeDrafts = false, status = "all" } = {}) {
     if (API_CONFIG.USE_API) {
-      const query = new URLSearchParams();
-      if (includeDrafts) query.set("all", "1");
-      if (status && status !== "all") query.set("status", status);
-      const qs = query.toString();
-      const data = await apiRequest(`/projects${qs ? `?${qs}` : ""}`);
-      return data;
+      let endpoint = "/projects";
+      if (includeDrafts) {
+        endpoint = "/projects/admin/all";
+        if (status && status !== "all") {
+          endpoint += `?status=${encodeURIComponent(status)}`;
+        }
+      } else {
+        const query = new URLSearchParams();
+        if (status && status !== "all") query.set("status", status);
+        const qs = query.toString();
+        if (qs) endpoint += `?${qs}`;
+      }
+
+      const res = await apiRequest(endpoint);
+      const rawList = Array.isArray(res) ? res : (res && res.data ? res.data : []);
+      return rawList.map(mapBackendToFrontend);
     }
     const all = local.all();
     if (status && status !== "all") {
@@ -263,38 +332,56 @@ export const projectService = {
   },
 
   async getBySlug(slug, { includeDrafts = false } = {}) {
-    if (API_CONFIG.USE_API) {
-      return apiRequest(`/projects/slug/${slug}${includeDrafts ? "?all=1" : ""}`);
-    }
-    const item = local.all().find((p) => p.slug === slug) || null;
+    const item = await this.getBySlugAny(slug);
     if (!item) return null;
     if (!includeDrafts && item.status !== "published") return null;
     return item;
   },
 
   /**
-   * Returns project by slug regardless of publication status.
-   * Useful for distinguishing between a 404 (non-existent) and an unpublished draft,
+   * Returns project by slug or ID regardless of publication status.
+   * Useful for distinguishing between a 404 and an unpublished draft,
    * and enabling authenticated admin previews of draft projects.
    */
   async getBySlugAny(slug) {
     if (API_CONFIG.USE_API) {
-      return apiRequest(`/projects/slug/${slug}?all=1`);
+      // 1. If slug is a valid 24-char MongoDB ObjectId, query by ID
+      if (/^[0-9a-fA-F]{24}$/.test(slug)) {
+        const item = await this.getById(slug);
+        if (item) return item;
+      }
+      // 2. Fetch projects and match by slug, id, or slugified title
+      const all = await this.list({ includeDrafts: true });
+      return (
+        all.find((p) => p.slug === slug || p.id === slug || this.slugify(p.title) === slug) ||
+        null
+      );
     }
     return local.all().find((p) => p.slug === slug) || null;
   },
 
   async getById(id) {
-    if (API_CONFIG.USE_API) return apiRequest(`/projects/${id}`);
+    if (API_CONFIG.USE_API) {
+      try {
+        const res = await apiRequest(`/projects/${id}`);
+        const raw = res && res.data ? res.data : res;
+        return mapBackendToFrontend(raw);
+      } catch {
+        return null;
+      }
+    }
     return local.all().find((p) => p.id === id) || null;
   },
 
   async create(payload) {
     if (API_CONFIG.USE_API) {
-      return apiRequest("/projects", {
+      const backendPayload = mapFrontendToBackend(payload);
+      const res = await apiRequest("/projects", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(backendPayload),
       });
+      const raw = res && res.data ? res.data : res;
+      return mapBackendToFrontend(raw);
     }
     const all = local.all();
     const item = {
@@ -310,10 +397,13 @@ export const projectService = {
 
   async update(id, payload) {
     if (API_CONFIG.USE_API) {
-      return apiRequest(`/projects/${id}`, {
+      const backendPayload = mapFrontendToBackend(payload);
+      const res = await apiRequest(`/projects/${id}`, {
         method: "PUT",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(backendPayload),
       });
+      const raw = res && res.data ? res.data : res;
+      return mapBackendToFrontend(raw);
     }
     const all = local.all();
     const next = all.map((p) =>
@@ -340,7 +430,8 @@ export const projectService = {
 
   async remove(id) {
     if (API_CONFIG.USE_API) {
-      return apiRequest(`/projects/${id}`, { method: "DELETE" });
+      await apiRequest(`/projects/${id}`, { method: "DELETE" });
+      return true;
     }
     local.save(local.all().filter((p) => p.id !== id));
     return true;

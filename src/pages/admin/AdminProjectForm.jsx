@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import SEO from "../../components/SEO";
 import { projectService } from "../../services/projectService";
+import { API_CONFIG, apiRequest } from "../../services/api";
 import { PHOTOGRAPHY_CATEGORIES, VIDEOGRAPHY_CATEGORIES } from "../../data/projects";
 import { getVideoEmbedInfo } from "../../utils/projectFilters";
 import { saveDeviceVideoFile, resolveVideoUrl, formatBytes } from "../../utils/videoStorage";
@@ -98,14 +99,31 @@ export default function AdminProjectForm() {
     if (!list.length) return;
     setProcessing(true);
     try {
-      const urls = await Promise.all(
-        list.map((file) => compressImageFile(file, 1600, 1600, 0.82))
-      );
-      if (kind === "cover") set("cover", urls[0]);
-      else set("gallery", [...form.gallery, ...urls]);
-      toast.push("Image(s) processed and added.");
-    } catch {
-      toast.push("Could not process selected image(s).", "err");
+      if (API_CONFIG.USE_API) {
+        const urls = await Promise.all(
+          list.map(async (file) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await apiRequest("/upload", {
+              method: "POST",
+              body: formData,
+            });
+            return res.url || (res.data && res.data.url);
+          })
+        );
+        if (kind === "cover") set("cover", urls[0]);
+        else set("gallery", [...form.gallery, ...urls]);
+        toast.push(urls.length > 1 ? `${urls.length} images uploaded.` : "Image uploaded.");
+      } else {
+        const urls = await Promise.all(
+          list.map((file) => compressImageFile(file, 1600, 1600, 0.82))
+        );
+        if (kind === "cover") set("cover", urls[0]);
+        else set("gallery", [...form.gallery, ...urls]);
+        toast.push("Image(s) processed and added.");
+      }
+    } catch (err) {
+      toast.push(err.message || "Could not upload selected image(s).", "err");
     } finally {
       setProcessing(false);
     }
@@ -117,18 +135,37 @@ export default function AdminProjectForm() {
 
     setVideoUploading(true);
     try {
-      const res = await saveDeviceVideoFile(file);
-      setForm((prev) => ({
-        ...prev,
-        videoUrl: res.uri,
-        videoProvider: "device",
-        title: prev.title || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
-      }));
-      setVideoPreviewUrl(res.objectUrl);
-      setVideoInfo({ name: res.fileName, size: res.fileSize });
-      toast.push(`Video loaded from device: ${file.name} (${formatBytes(file.size)})`);
-    } catch {
-      toast.push("Could not process video file from device.", "err");
+      if (API_CONFIG.USE_API) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await apiRequest("/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const videoUrl = res.url || (res.data && res.data.url);
+        setForm((prev) => ({
+          ...prev,
+          videoUrl,
+          videoProvider: "device",
+          title: prev.title || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
+        }));
+        setVideoPreviewUrl(videoUrl);
+        setVideoInfo({ name: file.name, size: file.size });
+        toast.push(`Video uploaded: ${file.name}`);
+      } else {
+        const res = await saveDeviceVideoFile(file);
+        setForm((prev) => ({
+          ...prev,
+          videoUrl: res.uri,
+          videoProvider: "device",
+          title: prev.title || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
+        }));
+        setVideoPreviewUrl(res.objectUrl);
+        setVideoInfo({ name: res.fileName, size: res.fileSize });
+        toast.push(`Video loaded from device: ${file.name} (${formatBytes(file.size)})`);
+      }
+    } catch (err) {
+      toast.push(err.message || "Could not upload video file.", "err");
     } finally {
       setVideoUploading(false);
     }
