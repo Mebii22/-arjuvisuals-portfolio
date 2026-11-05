@@ -66,7 +66,11 @@ export const serviceService = {
 
         const res = await apiRequest(endpoint);
         const rawList = Array.isArray(res) ? res : res && res.data ? res.data : [];
-        return rawList.map(mapBackendToFrontend);
+        const mapped = rawList.map(mapBackendToFrontend);
+        if (Array.isArray(mapped)) {
+          storage.write(KEYS.services, mapped);
+        }
+        return mapped;
       } catch (err) {
         console.warn("API service listing failed, falling back to local storage:", err.message);
       }
@@ -104,7 +108,9 @@ export const serviceService = {
         body: JSON.stringify(payload),
       });
       const created = res && res.data ? res.data : res;
-      return mapBackendToFrontend(created);
+      const mapped = mapBackendToFrontend(created);
+      local.save([mapped, ...local.all().filter((s) => s.id !== mapped.id && s._id !== mapped.id)]);
+      return mapped;
     }
     const item = { ...payload, id: payload.id || `s-${Date.now()}` };
     local.save([item, ...local.all()]);
@@ -118,7 +124,9 @@ export const serviceService = {
         body: JSON.stringify(payload),
       });
       const updated = res && res.data ? res.data : res;
-      return mapBackendToFrontend(updated);
+      const mapped = mapBackendToFrontend(updated);
+      local.save(local.all().map((s) => (s.id === id || s._id === id ? mapped : s)));
+      return mapped;
     }
     const next = local.all().map((s) => (s.id === id ? { ...s, ...payload, id } : s));
     local.save(next);
@@ -136,6 +144,7 @@ export const serviceService = {
   async remove(id) {
     if (API_CONFIG.USE_API) {
       await apiRequest(`/services/${id}`, { method: "DELETE" });
+      local.save(local.all().filter((s) => s.id !== id && s._id !== id));
       return true;
     }
     local.save(local.all().filter((s) => s.id !== id && s._id !== id));

@@ -248,12 +248,17 @@ const local = {
 export const mapBackendToFrontend = (b) => {
   if (!b) return null;
   const id = b._id || b.id;
-  const isVideo = b.category === "videography" || b.type === "videography";
+  const isVideo = b.type === "videography" || b.category === "videography";
   const type = isVideo ? "videography" : "photography";
-  const cover = b.coverImage || b.cover || "";
-  const gallery = Array.isArray(b.images) && b.images.length > 0
-    ? b.images
-    : (Array.isArray(b.gallery) && b.gallery.length > 0 ? b.gallery : [cover].filter(Boolean));
+  const cover = b.cover || b.coverImage || b.thumbnail || "";
+  const thumbnail = b.thumbnail || cover;
+
+  // Stills / gallery
+  const gallery = Array.isArray(b.gallery) && b.gallery.length > 0
+    ? b.gallery
+    : (Array.isArray(b.images) && b.images.length > 0
+      ? b.images
+      : (Array.isArray(b.videoStills) && b.videoStills.length > 0 ? b.videoStills : []));
 
   // Determine display category from subCategory, legacy map, or default
   const slugKey = b.slug || (b.title ? projectService.slugify(b.title) : id);
@@ -262,7 +267,7 @@ export const mapBackendToFrontend = (b) => {
     LEGACY_PROJECT_INFO[id] ||
     LEGACY_PROJECT_INFO[b.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-")];
 
-  let category = b.subCategory || (matchedInfo ? matchedInfo.category : null);
+  let category = b.category || b.subCategory || (matchedInfo ? matchedInfo.category : null);
   if (!category || category === "photography" || category === "videography") {
     category = isVideo ? "Cinematic Films" : "Wedding Photography";
   }
@@ -277,10 +282,13 @@ export const mapBackendToFrontend = (b) => {
     short: b.short || b.description || "",
     type,
     category,
+    subCategory: category,
     cover,
     coverImage: cover,
+    thumbnail,
     gallery,
     images: gallery,
+    videoStills: Array.isArray(b.videoStills) && b.videoStills.length > 0 ? b.videoStills : gallery,
     status: b.status || "draft",
     featured: Boolean(b.featured),
     videoUrl: b.videoUrl || "",
@@ -288,6 +296,7 @@ export const mapBackendToFrontend = (b) => {
     shootDate: b.shootDate || "",
     duration: b.duration || "",
     videoProvider: b.videoProvider || (b.videoUrl && b.videoUrl.includes("vimeo") ? "vimeo" : "youtube"),
+    photoLocations: b.photoLocations || {},
   };
 };
 
@@ -301,33 +310,26 @@ export const mapFrontendToBackend = (f) => {
   if (f.description !== undefined || f.short !== undefined) {
     mapped.description = String(f.description || f.short || f.title || "").trim();
   }
-  if (f.type !== undefined || f.category !== undefined) {
-    const isVideo =
-      f.type === "videography" ||
-      (typeof f.category === "string" && f.category.toLowerCase().includes("video"));
-    mapped.category = isVideo ? "videography" : "photography";
-    if (f.category && f.category !== "photography" && f.category !== "videography") {
-      mapped.subCategory = f.category;
-    }
+  if (f.type !== undefined) {
+    mapped.type = f.type === "videography" ? "videography" : "photography";
   }
-  if (f.coverImage !== undefined || f.cover !== undefined) {
-    const isVideo =
-      f.type === "videography" ||
-      (typeof f.category === "string" && f.category.toLowerCase().includes("video"));
-    const coverImage = f.coverImage || f.cover || "";
-    mapped.coverImage =
-      coverImage.trim() ||
-      (isVideo
-        ? "/images/projects/nature-photography/cover.jpg"
-        : "/images/projects/wedding-photography/cover.jpg");
+  if (f.category !== undefined) {
+    mapped.category = String(f.category).trim();
+    mapped.subCategory = String(f.category).trim();
   }
-  if (f.images !== undefined || f.gallery !== undefined) {
-    mapped.images =
-      Array.isArray(f.images) && f.images.length > 0
-        ? f.images
-        : Array.isArray(f.gallery) && f.gallery.length > 0
-        ? f.gallery
-        : [mapped.coverImage || f.coverImage || f.cover].filter(Boolean);
+  if (f.cover !== undefined || f.coverImage !== undefined || f.thumbnail !== undefined) {
+    const c = (f.cover || f.coverImage || f.thumbnail || "").trim();
+    mapped.cover = c;
+    mapped.coverImage = c;
+    mapped.thumbnail = (f.thumbnail || c).trim();
+  }
+  if (f.gallery !== undefined || f.images !== undefined || f.videoStills !== undefined) {
+    const g = Array.isArray(f.gallery)
+      ? f.gallery
+      : (Array.isArray(f.images) ? f.images : (Array.isArray(f.videoStills) ? f.videoStills : []));
+    mapped.gallery = g;
+    mapped.images = g;
+    mapped.videoStills = Array.isArray(f.videoStills) ? f.videoStills : g;
   }
   if (f.status !== undefined) {
     mapped.status = f.status === "published" ? "published" : "draft";
@@ -336,21 +338,30 @@ export const mapFrontendToBackend = (f) => {
     mapped.featured = Boolean(f.featured);
   }
   if (f.videoUrl !== undefined) {
-    mapped.videoUrl = f.videoUrl;
+    mapped.videoUrl = String(f.videoUrl).trim();
+  }
+  if (f.videoProvider !== undefined) {
+    mapped.videoProvider = String(f.videoProvider).trim();
+  }
+  if (f.duration !== undefined) {
+    mapped.duration = String(f.duration).trim();
+  }
+  if (f.shootDate !== undefined) {
+    mapped.shootDate = String(f.shootDate).trim();
+  }
+  if (f.location !== undefined) {
+    mapped.location = String(f.location).trim();
+  }
+  if (f.short !== undefined) {
+    mapped.short = String(f.short).trim();
+  }
+  if (f.photoLocations !== undefined) {
+    mapped.photoLocations = f.photoLocations;
   }
   if (f.slug !== undefined) {
     mapped.slug = f.slug;
   } else if (f.title !== undefined) {
     mapped.slug = projectService.slugify(f.title);
-  }
-  if (f.location !== undefined) {
-    mapped.location = f.location;
-  }
-  if (f.short !== undefined) {
-    mapped.short = f.short;
-  }
-  if (f.subCategory !== undefined) {
-    mapped.subCategory = f.subCategory;
   }
 
   return mapped;

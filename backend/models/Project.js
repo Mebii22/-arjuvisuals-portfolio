@@ -12,24 +12,86 @@ const projectSchema = new mongoose.Schema(
       required: [true, "Project description is required"],
       trim: true,
     },
-    category: {
+    type: {
       type: String,
-      required: [true, "Project category is required"],
       enum: {
         values: ["photography", "videography"],
-        message: "Category must be either photography or videography",
+        message: "Type must be either photography or videography",
       },
+      default: "photography",
       lowercase: true,
+      trim: true,
+    },
+    category: {
+      type: String,
+      required: [true, "Project category / discipline is required"],
+      trim: true,
+    },
+    subCategory: {
+      type: String,
+      default: "",
       trim: true,
     },
     coverImage: {
       type: String,
-      required: [true, "Cover image URL is required"],
+      default: "",
+      trim: true,
+    },
+    cover: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    thumbnail: {
+      type: String,
+      default: "",
       trim: true,
     },
     images: {
       type: [String],
       default: [],
+    },
+    gallery: {
+      type: [String],
+      default: [],
+    },
+    videoStills: {
+      type: [String],
+      default: [],
+    },
+    videoUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    videoProvider: {
+      type: String,
+      default: "auto",
+      trim: true,
+    },
+    duration: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    shootDate: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    location: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    short: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    photoLocations: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     status: {
       type: String,
@@ -45,33 +107,67 @@ const projectSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    videoUrl: {
-      type: String,
-      default: "",
-    },
     slug: {
       type: String,
       default: "",
+      trim: true,
     },
-    location: {
-      type: String,
-      default: "",
-    },
-    short: {
-      type: String,
-      default: "",
-    },
-    subCategory: {
-      type: String,
-      default: "",
+    placeholder: {
+      type: Boolean,
+      default: false,
     },
   },
   {
-    timestamps: true, // Automatically manages createdAt and updatedAt
+    timestamps: true,
     toJSON: {
       virtuals: true,
       transform: (doc, ret) => {
         ret.id = ret._id;
+
+        // Ensure cover / coverImage / thumbnail are consistently populated
+        const c = ret.coverImage || ret.cover || ret.thumbnail || "";
+        ret.cover = c;
+        ret.coverImage = c;
+        ret.thumbnail = ret.thumbnail || c;
+
+        // Ensure gallery / images / videoStills are consistently populated
+        const g = Array.isArray(ret.gallery) && ret.gallery.length > 0
+          ? ret.gallery
+          : (Array.isArray(ret.images) && ret.images.length > 0
+            ? ret.images
+            : (Array.isArray(ret.videoStills) && ret.videoStills.length > 0 ? ret.videoStills : []));
+        ret.gallery = g;
+        ret.images = g;
+        ret.videoStills = Array.isArray(ret.videoStills) && ret.videoStills.length > 0 ? ret.videoStills : g;
+
+        // Ensure category and subCategory are synced
+        ret.category = ret.category || ret.subCategory || (ret.type === "videography" ? "Cinematic Films" : "Wedding Photography");
+        ret.subCategory = ret.subCategory || ret.category;
+
+        return ret;
+      },
+    },
+    toObject: {
+      virtuals: true,
+      transform: (doc, ret) => {
+        ret.id = ret._id;
+        const c = ret.coverImage || ret.cover || ret.thumbnail || "";
+        ret.cover = c;
+        ret.coverImage = c;
+        ret.thumbnail = ret.thumbnail || c;
+
+        const g = Array.isArray(ret.gallery) && ret.gallery.length > 0
+          ? ret.gallery
+          : (Array.isArray(ret.images) && ret.images.length > 0
+            ? ret.images
+            : (Array.isArray(ret.videoStills) && ret.videoStills.length > 0 ? ret.videoStills : []));
+        ret.gallery = g;
+        ret.images = g;
+        ret.videoStills = Array.isArray(ret.videoStills) && ret.videoStills.length > 0 ? ret.videoStills : g;
+
+        ret.category = ret.category || ret.subCategory || (ret.type === "videography" ? "Cinematic Films" : "Wedding Photography");
+        ret.subCategory = ret.subCategory || ret.category;
+
         return ret;
       },
     },
@@ -81,4 +177,3 @@ const projectSchema = new mongoose.Schema(
 const Project = mongoose.model("Project", projectSchema);
 
 module.exports = Project;
-

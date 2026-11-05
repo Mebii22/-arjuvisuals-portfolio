@@ -178,9 +178,9 @@ const addService = async (req, res) => {
       ? category.toLowerCase()
       : "photography";
 
-    const validStatus = ["draft", "published"].includes(status.toLowerCase())
-      ? status.toLowerCase()
-      : "published";
+    const validStatus = ["draft", "published"].includes(String(status).toLowerCase())
+      ? String(status).toLowerCase()
+      : (req.body.published !== undefined ? (req.body.published ? "published" : "draft") : "published");
 
     const featuresArray = Array.isArray(features)
       ? features.map((f) => String(f).trim()).filter(Boolean)
@@ -259,6 +259,8 @@ const updateService = async (req, res) => {
       if (["draft", "published"].includes(st)) {
         updateData.status = st;
       }
+    } else if (body.published !== undefined) {
+      updateData.status = body.published ? "published" : "draft";
     }
     if (body.cover !== undefined) updateData.cover = String(body.cover).trim();
     if (body.startingPrice !== undefined) updateData.startingPrice = String(body.startingPrice).trim();

@@ -275,7 +275,17 @@ export default function AdminProjects() {
                 <tr key={p.id}>
                   <td>
                     <div style={{ position: "relative", width: 56, height: 42 }}>
-                      <img src={p.cover} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img
+                        src={p.cover || p.thumbnail || (isVideo ? "/images/projects/travel-photography/cover.jpg" : "/images/projects/wedding-photography/cover.jpg")}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = isVideo
+                            ? "/images/projects/travel-photography/cover.jpg"
+                            : "/images/projects/wedding-photography/cover.jpg";
+                        }}
+                      />
                       {isVideo && (
                         <span
                           style={{

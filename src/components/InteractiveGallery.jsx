@@ -11,7 +11,7 @@ function flatten(projects) {
     if (isVideo) {
       tiles.push({
         id: `video-${p.id}`,
-        src: p.cover,
+        src: p.cover || p.thumbnail || p.coverImage || "/images/projects/travel-photography/cover.jpg",
         title: p.title,
         slug: p.slug,
         type: "videography",

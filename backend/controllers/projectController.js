@@ -1,6 +1,15 @@
 const mongoose = require("mongoose");
 const Project = require("../models/Project");
 
+const slugify = (text) => {
+  return String(text || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
 /**
  * @desc    Create a new project
  * @route   POST /api/projects
@@ -8,30 +17,111 @@ const Project = require("../models/Project");
  */
 const addProject = async (req, res) => {
   try {
-    const { title, description, category, coverImage, images, status, featured, videoUrl, slug, location, short, subCategory } = req.body;
+    const {
+      title,
+      description,
+      type,
+      category,
+      subCategory,
+      coverImage,
+      cover,
+      thumbnail,
+      images,
+      gallery,
+      videoStills,
+      status,
+      featured,
+      videoUrl,
+      videoProvider,
+      duration,
+      shootDate,
+      slug,
+      location,
+      short,
+      photoLocations,
+      placeholder,
+    } = req.body;
 
     // Validate required fields
-    if (!title || !description || !category || !coverImage) {
+    if (!title || !String(title).trim()) {
       return res.status(400).json({
         success: false,
-        message: "Title, description, category, and coverImage are required fields",
+        message: "Project title is required",
       });
     }
 
+    if (!description || !String(description).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Project description is required",
+      });
+    }
+
+    const cleanType =
+      type === "videography" ||
+      (typeof category === "string" && category.toLowerCase().includes("video"))
+        ? "videography"
+        : "photography";
+
+    const cleanCategory =
+      (category && String(category).trim()) ||
+      (subCategory && String(subCategory).trim()) ||
+      (cleanType === "videography" ? "Cinematic Films" : "Wedding Photography");
+
+    const resolvedCover = (coverImage || cover || thumbnail || "").trim();
+
+    // If publishing, cover/thumbnail is required
+    const targetStatus = status === "published" ? "published" : "draft";
+    if (targetStatus === "published" && !resolvedCover) {
+      return res.status(400).json({
+        success: false,
+        message:
+          cleanType === "videography"
+            ? "A video thumbnail / cover image is required to publish"
+            : "A cover photograph is required to publish",
+      });
+    }
+
+    // If publishing videography, videoUrl is required
+    if (targetStatus === "published" && cleanType === "videography" && !String(videoUrl || "").trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "A video source or URL is required to publish a videography project",
+      });
+    }
+
+    const resolvedGallery = Array.isArray(gallery) && gallery.length > 0
+      ? gallery
+      : (Array.isArray(images) && images.length > 0
+        ? images
+        : (Array.isArray(videoStills) ? videoStills : []));
+
+    const finalSlug = slug && String(slug).trim() ? slugify(slug) : slugify(title);
+
     // Create new project with Mongoose
     const project = await Project.create({
-      title,
-      description,
-      category,
-      coverImage,
-      images: Array.isArray(images) ? images : [],
-      status: status || "draft",
+      title: String(title).trim(),
+      description: String(description).trim(),
+      type: cleanType,
+      category: cleanCategory,
+      subCategory: cleanCategory,
+      coverImage: resolvedCover,
+      cover: resolvedCover,
+      thumbnail: (thumbnail || resolvedCover).trim(),
+      images: resolvedGallery,
+      gallery: resolvedGallery,
+      videoStills: Array.isArray(videoStills) ? videoStills : resolvedGallery,
+      status: targetStatus,
       featured: typeof featured === "boolean" ? featured : false,
-      videoUrl: videoUrl || "",
-      slug: slug || "",
-      location: location || "",
-      short: short || "",
-      subCategory: subCategory || "",
+      videoUrl: (videoUrl || "").trim(),
+      videoProvider: videoProvider || "auto",
+      duration: (duration || "").trim(),
+      shootDate: (shootDate || "").trim(),
+      slug: finalSlug,
+      location: (location || "").trim(),
+      short: (short || "").trim(),
+      photoLocations: photoLocations || {},
+      placeholder: Boolean(placeholder),
     });
 
     res.status(201).json({
@@ -52,6 +142,7 @@ const addProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error while creating project",
+      error: error.message,
     });
   }
 };
@@ -60,16 +151,20 @@ const addProject = async (req, res) => {
  * @desc    Get all published projects (Public)
  * @route   GET /api/projects
  * @access  Public
- * @query   category (optional), featured (optional)
  */
 const getPublishedProjects = async (req, res) => {
   try {
-    // Base filter: only show published projects to public users
     const filter = { status: "published" };
 
-    // Filter by category (photography or videography)
-    if (req.query.category) {
-      filter.category = req.query.category.toLowerCase().trim();
+    // Filter by type (photography vs videography)
+    if (req.query.type && ["photography", "videography"].includes(req.query.type.toLowerCase())) {
+      filter.type = req.query.type.toLowerCase();
+    }
+
+    // Filter by category or discipline name (case-insensitive)
+    if (req.query.category && req.query.category.toLowerCase() !== "all") {
+      const catRegex = new RegExp(`^${req.query.category.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      filter.$or = [{ category: catRegex }, { subCategory: catRegex }];
     }
 
     // Filter by featured status
@@ -77,7 +172,6 @@ const getPublishedProjects = async (req, res) => {
       filter.featured = req.query.featured === "true";
     }
 
-    // Sort newest first
     const projects = await Project.find(filter).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -90,6 +184,7 @@ const getPublishedProjects = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error while fetching published projects",
+      error: error.message,
     });
   }
 };
@@ -103,18 +198,23 @@ const getAllProjects = async (req, res) => {
   try {
     const filter = {};
 
-    // Support optional filters for admin dashboard
-    if (req.query.category) {
-      filter.category = req.query.category.toLowerCase().trim();
+    if (req.query.type && ["photography", "videography"].includes(req.query.type.toLowerCase())) {
+      filter.type = req.query.type.toLowerCase();
     }
+
     if (req.query.status && req.query.status !== "all") {
       filter.status = req.query.status.toLowerCase().trim();
     }
+
+    if (req.query.category && req.query.category.toLowerCase() !== "all") {
+      const catRegex = new RegExp(`^${req.query.category.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      filter.$or = [{ category: catRegex }, { subCategory: catRegex }];
+    }
+
     if (req.query.featured !== undefined) {
       filter.featured = req.query.featured === "true";
     }
 
-    // Return all projects, newest first
     const projects = await Project.find(filter).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -127,28 +227,27 @@ const getAllProjects = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error while fetching all projects",
+      error: error.message,
     });
   }
 };
 
 /**
- * @desc    Get single project by ID
+ * @desc    Get single project by ID or slug
  * @route   GET /api/projects/:id
- * @access  Public
+ * @access  Public (drafts restricted to admin)
  */
 const getSingleProject = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate MongoDB ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid project ID format",
-      });
+    let project = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      project = await Project.findById(id);
     }
-
-    const project = await Project.findById(id);
+    if (!project) {
+      project = await Project.findOne({ slug: id });
+    }
 
     if (!project) {
       return res.status(404).json({
@@ -171,9 +270,7 @@ const getSingleProject = async (req, res) => {
           if (admin && admin.role === "admin") {
             isAuthedAdmin = true;
           }
-        } catch {
-          // Token invalid or expired
-        }
+        } catch {}
       }
 
       if (!isAuthedAdmin) {
@@ -193,12 +290,13 @@ const getSingleProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error while fetching project",
+      error: error.message,
     });
   }
 };
 
 /**
- * @desc    Update existing project
+ * @desc    Update existing project (supports safe partial updates)
  * @route   PUT /api/projects/:id
  * @access  Private (Admin only)
  */
@@ -206,7 +304,6 @@ const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate MongoDB ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -214,26 +311,57 @@ const updateProject = async (req, res) => {
       });
     }
 
-    // Strip immutable _id if present in request body
-    const updateData = { ...req.body };
-    delete updateData._id;
-
-    // Find and update project with validators enabled
-    const updatedProject = await Project.findByIdAndUpdate(
-      id,
-      updateData,
-      {
-        new: true, // Return updated document
-        runValidators: true, // Re-run schema validators on update
-      }
-    );
-
-    if (!updatedProject) {
+    const existing = await Project.findById(id);
+    if (!existing) {
       return res.status(404).json({
         success: false,
         message: "Project not found",
       });
     }
+
+    const updateData = { ...req.body };
+    delete updateData._id;
+    delete updateData.id;
+
+    // Normalize and synchronize cover / coverImage / thumbnail
+    if (updateData.cover !== undefined || updateData.coverImage !== undefined || updateData.thumbnail !== undefined) {
+      const c = (updateData.cover || updateData.coverImage || updateData.thumbnail || "").trim();
+      updateData.cover = c;
+      updateData.coverImage = c;
+      if (updateData.thumbnail === undefined) updateData.thumbnail = c;
+    }
+
+    // Normalize and synchronize gallery / images / videoStills
+    if (updateData.gallery !== undefined || updateData.images !== undefined || updateData.videoStills !== undefined) {
+      const g = Array.isArray(updateData.gallery)
+        ? updateData.gallery
+        : (Array.isArray(updateData.images) ? updateData.images : (Array.isArray(updateData.videoStills) ? updateData.videoStills : []));
+      updateData.gallery = g;
+      updateData.images = g;
+      if (updateData.videoStills === undefined && existing.type === "videography") {
+        updateData.videoStills = g;
+      }
+    }
+
+    // Normalize category / subCategory
+    if (updateData.category !== undefined) {
+      updateData.category = String(updateData.category).trim();
+      updateData.subCategory = updateData.category;
+    }
+
+    if (updateData.type !== undefined) {
+      updateData.type = updateData.type === "videography" ? "videography" : "photography";
+    }
+
+    if (updateData.title !== undefined) updateData.title = String(updateData.title).trim();
+    if (updateData.description !== undefined) updateData.description = String(updateData.description).trim();
+    if (updateData.videoUrl !== undefined) updateData.videoUrl = String(updateData.videoUrl).trim();
+    if (updateData.slug !== undefined) updateData.slug = slugify(updateData.slug);
+
+    const updatedProject = await Project.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    });
 
     res.status(200).json({
       success: true,
@@ -253,6 +381,7 @@ const updateProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error while updating project",
+      error: error.message,
     });
   }
 };
@@ -266,7 +395,6 @@ const deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate MongoDB ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -292,6 +420,7 @@ const deleteProject = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error while deleting project",
+      error: error.message,
     });
   }
 };
@@ -304,4 +433,3 @@ module.exports = {
   updateProject,
   deleteProject,
 };
-

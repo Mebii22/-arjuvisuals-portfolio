@@ -32,7 +32,24 @@ export default function ProjectCard({ project, className = "", variant = "portra
       onMouseLeave={reset}
     >
       <div className="thumb" style={{ position: "relative", overflow: "hidden" }}>
-        <img src={project.cover} alt={project.title} loading="lazy" />
+        <img
+          src={
+            project.cover ||
+            project.thumbnail ||
+            project.coverImage ||
+            (isVideo
+              ? "/images/projects/travel-photography/cover.jpg"
+              : "/images/projects/wedding-photography/cover.jpg")
+          }
+          alt={project.title}
+          loading="lazy"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = isVideo
+              ? "/images/projects/travel-photography/cover.jpg"
+              : "/images/projects/wedding-photography/cover.jpg";
+          }}
+        />
         {isVideo && (
           <>
             <span className="video-play-badge">
