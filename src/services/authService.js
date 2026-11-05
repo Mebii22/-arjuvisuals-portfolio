@@ -50,4 +50,25 @@ export const authService = {
   email() {
     return sessionStorage.getItem(EMAIL_KEY) || "";
   },
+
+  async changePassword({ currentPassword, newPassword, confirmPassword }) {
+    if (!currentPassword) {
+      throw new Error("Enter your current password.");
+    }
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error("New password must be at least 8 characters.");
+    }
+    if (confirmPassword && newPassword !== confirmPassword) {
+      throw new Error("New passwords do not match.");
+    }
+
+    if (API_CONFIG.USE_API) {
+      const res = await apiRequest("/auth/password", {
+        method: "PUT",
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+      });
+      return res;
+    }
+    return { success: true, message: "Password updated." };
+  },
 };

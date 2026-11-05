@@ -7,6 +7,7 @@ const projectRoutes = require("./routes/projectRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const serviceRoutes = require("./routes/serviceRoutes");
 const inquiryRoutes = require("./routes/inquiryRoutes");
+const profileRoutes = require("./routes/profileRoutes");
 
 // Load environment variables
 dotenv.config();
@@ -50,6 +51,7 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/inquiries", inquiryRoutes);
+app.use("/api/profile", profileRoutes);
 
 // Root health check route
 app.get("/", (req, res) => {

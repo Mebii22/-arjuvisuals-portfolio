@@ -1,121 +1,117 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import SEO from "../../components/SEO";
 import { projectService } from "../../services/projectService";
 import { API_CONFIG, apiRequest } from "../../services/api";
-import { ALL_CATEGORIES, PHOTOGRAPHY_CATEGORIES, VIDEOGRAPHY_CATEGORIES } from "../../data/projects";
-import { normCategory } from "../../utils/projectFilters";
 import { useToast } from "../../context/ToastContext";
 import { compressImageFile } from "../../utils/imageUtils";
 
 export default function AdminPhotos() {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fileInputRef = useRef(null);
+  const coverFileInputRef = useRef(null);
+
   const [projects, setProjects] = useState([]);
-  const [projectId, setProjectId] = useState("");
+  const [activeProjectId, setActiveProjectId] = useState(searchParams.get("project") || null);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Staged files for adding to gallery
   const [stagedFiles, setStagedFiles] = useState([]);
   const [urlInput, setUrlInput] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [filterCategory, setFilterCategory] = useState("all");
-  const [filterProject, setFilterProject] = useState("all");
+  const [uploadLocation, setUploadLocation] = useState("");
   const [uploading, setUploading] = useState(false);
 
-  const load = () =>
-    projectService
-      .list({ includeDrafts: true })
-      .then(setProjects)
-      .catch((err) => toast.push(err.message || "Could not load projects.", "err"));
+  // Cover replace input
+  const [coverUrlInput, setCoverUrlInput] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const load = async () => {
+    try {
+      const data = await projectService.list({ includeDrafts: true });
+      setProjects(data);
+    } catch (err) {
+      toast.push(err.message || "Could not load projects.", "err");
+    }
+  };
+
   useEffect(() => {
     load();
   }, []);
 
-  const availableCategories = useMemo(() => {
-    const list =
-      typeFilter === "photography"
-        ? [...PHOTOGRAPHY_CATEGORIES]
-        : typeFilter === "videography"
-        ? [...VIDEOGRAPHY_CATEGORIES]
-        : [...ALL_CATEGORIES];
-
-    // Add any custom categories from user-created projects
-    projects.forEach((p) => {
-      if (
-        p.category &&
-        (typeFilter === "all" || (p.type || "photography") === typeFilter) &&
-        !list.some((c) => normCategory(c) === normCategory(p.category))
-      ) {
-        list.push(p.category);
-      }
+  // Sync URL query param when active project changes
+  const selectProject = (id) => {
+    setActiveProjectId(id);
+    setStagedFiles([]);
+    setUrlInput("");
+    setCoverUrlInput("");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) next.set("project", id);
+      else next.delete("project");
+      return next;
     });
-    return list;
-  }, [typeFilter, projects]);
+  };
 
-  const filteredProjectsForSelect = useMemo(() => {
+  // Find currently active project
+  const activeProject = useMemo(() => {
+    if (!activeProjectId) return null;
+    return projects.find((p) => p.id === activeProjectId || p._id === activeProjectId) || null;
+  }, [projects, activeProjectId]);
+
+  // Filtered projects for the overview list
+  const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
       const pType = p.type || "photography";
       if (typeFilter !== "all" && pType !== typeFilter) return false;
-      if (filterCategory !== "all" && normCategory(p.category) !== normCategory(filterCategory)) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const text = `${p.title || ""} ${p.category || ""} ${p.location || ""}`.toLowerCase();
+        if (!text.includes(q)) return false;
+      }
       return true;
     });
-  }, [projects, typeFilter, filterCategory]);
+  }, [projects, typeFilter, searchQuery]);
 
-  const photos = useMemo(() => {
-    const rows = [];
-    projects.forEach((p) => {
-      const pType = p.type || "photography";
-      if (typeFilter !== "all" && pType !== typeFilter) return;
-      if (filterCategory !== "all" && normCategory(p.category) !== normCategory(filterCategory)) return;
-      if (filterProject !== "all" && p.id !== filterProject) return;
+  const photoCount = projects.filter((p) => (p.type || "photography") === "photography").length;
+  const videoCount = projects.filter((p) => p.type === "videography").length;
 
-      if (p.cover) {
-        rows.push({
-          src: p.cover,
-          project: p,
-          kind: "cover",
-          galleryIndex: -1,
-        });
-      }
-      (p.gallery || []).forEach((src, idx) => {
-        if (!src) return;
-        rows.push({
-          src,
-          project: p,
-          kind: "gallery",
-          galleryIndex: idx,
-        });
-      });
-    });
-    return rows;
-  }, [projects, typeFilter, filterCategory, filterProject]);
+  // Cloudinary / Compression File Processor
+  const processFiles = async (files) => {
+    if (!files.length) return [];
+    if (API_CONFIG.USE_API) {
+      return await Promise.all(
+        files.map(async (file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          const res = await apiRequest("/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const url = res.url || (res.data && res.data.url);
+          return { name: file.name, dataUrl: url };
+        })
+      );
+    } else {
+      return await Promise.all(
+        files.map(async (file) => {
+          const dataUrl = await compressImageFile(file, 1600, 1600, 0.82);
+          return { name: file.name, dataUrl };
+        })
+      );
+    }
+  };
 
+  // Multiple files chosen for gallery addition
   const onFilesChosen = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
     setUploading(true);
     try {
-      if (API_CONFIG.USE_API) {
-        const items = await Promise.all(
-          files.map(async (file) => {
-            const formData = new FormData();
-            formData.append("file", file);
-            const res = await apiRequest("/upload", {
-              method: "POST",
-              body: formData,
-            });
-            const url = res.url || (res.data && res.data.url);
-            return { name: file.name, size: file.size, dataUrl: url };
-          })
-        );
-        setStagedFiles((prev) => [...prev, ...items]);
-      } else {
-        const items = await Promise.all(
-          files.map(async (file) => {
-            const dataUrl = await compressImageFile(file, 1600, 1600, 0.82);
-            return { name: file.name, size: file.size, dataUrl };
-          })
-        );
-        setStagedFiles((prev) => [...prev, ...items]);
-      }
+      const items = await processFiles(files);
+      setStagedFiles((prev) => [...prev, ...items]);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch {
       toast.push("Could not process selected image file(s).", "err");
@@ -138,505 +134,742 @@ export default function AdminPhotos() {
     setStagedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const [uploadLocation, setUploadLocation] = useState("");
-  const selectedProject = projects.find((p) => p.id === projectId);
-
-  const add = async (e) => {
+  // Add staged files to active project's gallery
+  const addPhotosToGallery = async (e) => {
     e.preventDefault();
-    if (!projectId) {
-      toast.push("Please select a target project.", "err");
-      return;
-    }
+    if (!activeProject) return;
     if (!stagedFiles.length) {
-      toast.push("Please choose at least one image file or add a photo URL.", "err");
+      toast.push("Please choose at least one image or stage a photo URL.", "err");
       return;
     }
-    const p = projects.find((x) => x.id === projectId);
-    if (!p) return;
 
     const newUrls = stagedFiles.map((item) => item.dataUrl);
-    const nextLocations = { ...(p.photoLocations || {}) };
-    const locText = uploadLocation.trim() || p.location || "Kerala";
+    const nextLocations = { ...(activeProject.photoLocations || {}) };
+    const locText = uploadLocation.trim() || activeProject.location || "Kerala";
     newUrls.forEach((u) => {
       nextLocations[u] = locText;
     });
 
-    await projectService.update(p.id, {
-      gallery: [...(p.gallery || []), ...newUrls],
-      photoLocations: nextLocations,
-    });
-    toast.push(
-      `${newUrls.length} photograph(s) added with caption: “${p.category.replace(" Photography", "")} · ${locText}”.`
-    );
-    setStagedFiles([]);
-    setUploadLocation("");
-    load();
-  };
-
-  const updatePhotoLocation = async (ph, newLoc) => {
-    const p = ph.project;
-    const trimmed = (newLoc || "").trim();
-    const nextLocations = { ...(p.photoLocations || {}) };
-    nextLocations[ph.src] = trimmed;
-
-    const payload = { photoLocations: nextLocations };
-    if (ph.kind === "cover" && trimmed) {
-      payload.location = trimmed;
+    try {
+      await projectService.update(activeProject.id, {
+        gallery: [...(activeProject.gallery || []), ...newUrls],
+        photoLocations: nextLocations,
+      });
+      toast.push(
+        `${newUrls.length} photograph(s) added to “${activeProject.title}”.`
+      );
+      setStagedFiles([]);
+      setUploadLocation("");
+      await load();
+    } catch (err) {
+      toast.push(err.message || "Failed to add photos to gallery.", "err");
     }
-
-    await projectService.update(p.id, payload);
-    toast.push(`Updated caption to: “${p.category.replace(" Photography", "")} · ${trimmed || p.location}”`);
-    load();
   };
 
-  const setAsCover = async (ph) => {
-    const p = ph.project;
-    const oldCover = p.cover;
-    // Replace cover and swap old cover into gallery
-    const nextGallery = (p.gallery || []).filter((_, idx) => idx !== ph.galleryIndex);
+  // Replace Cover image
+  const handleCoverFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeProject) return;
+
+    setUploadingCover(true);
+    try {
+      const items = await processFiles([file]);
+      if (items.length && items[0].dataUrl) {
+        await applyNewCover(items[0].dataUrl);
+      }
+      if (coverFileInputRef.current) coverFileInputRef.current.value = "";
+    } catch {
+      toast.push("Failed to upload new cover photo.", "err");
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const handleCoverUrlSubmit = async (e) => {
+    e.preventDefault();
+    if (!coverUrlInput.trim() || !activeProject) return;
+    await applyNewCover(coverUrlInput.trim());
+    setCoverUrlInput("");
+  };
+
+  const applyNewCover = async (newCoverUrl) => {
+    if (!activeProject || !newCoverUrl) return;
+    const oldCover = activeProject.cover;
+    const nextGallery = [...(activeProject.gallery || [])];
+
+    // If the old cover is not already in the gallery, keep it preserved in gallery
     if (oldCover && !nextGallery.includes(oldCover)) {
       nextGallery.unshift(oldCover);
     }
-    await projectService.update(p.id, { cover: ph.src, gallery: nextGallery });
-    toast.push(`Updated cover photograph for “${p.title}”.`);
-    load();
+
+    try {
+      await projectService.update(activeProject.id, {
+        cover: newCoverUrl,
+        gallery: nextGallery,
+      });
+      toast.push(`Cover photograph updated for “${activeProject.title}”.`);
+      await load();
+    } catch (err) {
+      toast.push(err.message || "Failed to update cover photo.", "err");
+    }
   };
 
-  const removePhotoFromProject = async (ph) => {
-    if (ph.kind === "cover") {
-      toast.push("To change the cover photograph, use 'Set Cover' on any gallery photo or edit the project.", "err");
-      return;
+  // Update photo caption / location (after dot ·)
+  const updatePhotoLocation = async (src, newLoc, isCover = false) => {
+    if (!activeProject) return;
+    const trimmed = (newLoc || "").trim();
+    const nextLocations = { ...(activeProject.photoLocations || {}) };
+    nextLocations[src] = trimmed;
+
+    const payload = { photoLocations: nextLocations };
+    if (isCover && trimmed) {
+      payload.location = trimmed;
     }
-    const p = ph.project;
-    const nextGallery = (p.gallery || []).filter((_, idx) => idx !== ph.galleryIndex);
-    await projectService.update(p.id, { gallery: nextGallery });
-    toast.push(`Photograph removed from “${p.title}”.`);
-    load();
+
+    try {
+      await projectService.update(activeProject.id, payload);
+      toast.push(`Updated caption to: “${activeProject.category.replace(" Photography", "")} · ${trimmed || activeProject.location}”`);
+      await load();
+    } catch (err) {
+      toast.push("Failed to update caption.", "err");
+    }
+  };
+
+  // Promote a gallery photo to Cover
+  const setAsCover = async (photoSrc, galleryIndex) => {
+    if (!activeProject) return;
+    const oldCover = activeProject.cover;
+    const nextGallery = (activeProject.gallery || []).filter((_, idx) => idx !== galleryIndex);
+    if (oldCover && !nextGallery.includes(oldCover)) {
+      nextGallery.unshift(oldCover);
+    }
+
+    try {
+      await projectService.update(activeProject.id, {
+        cover: photoSrc,
+        gallery: nextGallery,
+      });
+      toast.push(`Updated cover photograph for “${activeProject.title}”.`);
+      await load();
+    } catch (err) {
+      toast.push("Failed to set cover photo.", "err");
+    }
+  };
+
+  // Remove photo from active project gallery
+  const removePhotoFromProject = async (galleryIndex) => {
+    if (!activeProject) return;
+    const nextGallery = (activeProject.gallery || []).filter((_, idx) => idx !== galleryIndex);
+    try {
+      await projectService.update(activeProject.id, { gallery: nextGallery });
+      toast.push(`Photograph removed from “${activeProject.title}”.`);
+      await load();
+    } catch (err) {
+      toast.push("Failed to remove photograph.", "err");
+    }
   };
 
   return (
     <>
-      <SEO title="Photographs" />
-      <div className="admin-top">
-        <h1>PHOTOGRAPHS</h1>
-      </div>
-      <div className="demo-banner">
-        Add, manage, and delete photographs across all <strong>7 photography disciplines</strong>. Client-side
-        compression prevents storage quota errors.
-      </div>
+      <SEO title="Project Media & Photos" />
 
-      <form className="admin-card form-grid" onSubmit={add}>
-        <h2 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em", fontSize: "1.4rem", margin: 0 }}>
-          ADD PHOTOGRAPHS TO PROJECT
-        </h2>
-        <div className="form-row">
-          <div className="field">
-            <label htmlFor="project-select">
-              Target Project <span className="req">*</span>
-            </label>
-            <select
-              id="project-select"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              <option value="">Select target project…</option>
-              {projects.map((p) => {
-                const isVideo = p.type === "videography";
-                return (
-                  <option key={p.id} value={p.id}>
-                    [{isVideo ? "VIDEO STILLS" : "PHOTO"}] {p.title} ({p.category})
-                  </option>
-                );
-              })}
-            </select>
+      {/* VIEW A: SINGLE PROJECT FOCUS MODE */}
+      {activeProject ? (
+        <div>
+          <div className="admin-top" style={{ marginBottom: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => selectProject(null)}
+                style={{ borderColor: "var(--dark-border)", color: "var(--stone)" }}
+              >
+                ← Back to All Projects
+              </button>
+              <div>
+                <h1 style={{ margin: 0, fontSize: "1.8rem" }}>{activeProject.title}</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.3rem" }}>
+                  <span className={`pill ${activeProject.type === "videography" ? "video" : "photo"}`}>
+                    {activeProject.type === "videography" ? "Videography" : "Photography"}
+                  </span>
+                  <span className={`pill ${activeProject.status === "published" ? "pub" : "draft"}`}>
+                    {activeProject.status === "published" ? "LIVE" : "DRAFT"}
+                  </span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+                    {activeProject.category} · {activeProject.location || "Kerala"}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor="photo-file-input">
-              Choose file(s) from device {uploading ? "(Processing…)" : ""}
-            </label>
-            <input
-              id="photo-file-input"
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              disabled={uploading}
-              onChange={onFilesChosen}
-              style={{ marginTop: "0.4rem" }}
-            />
-          </div>
-        </div>
 
-        <div className="form-row" style={{ alignItems: "flex-end" }}>
-          <div className="field" style={{ flex: 1 }}>
-            <label htmlFor="photo-url-input">Or paste photo image URL</label>
-            <input
-              id="photo-url-input"
-              type="url"
-              placeholder="https://example.com/photo.jpg"
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addUrlToStaged();
-                }
-              }}
-            />
-          </div>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={addUrlToStaged}
-            style={{ borderColor: "var(--sand)", color: "var(--sand)", height: "42px" }}
-          >
-            Stage URL
-          </button>
-        </div>
+          {/* SECTION 1: COVER PHOTO */}
+          <div className="admin-card form-grid" style={{ marginBottom: "1.8rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <p className="kicker" style={{ margin: 0 }}>Cover Photograph</p>
+              <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                Main image displayed on the portfolio grid and project header
+              </span>
+            </div>
 
-        <div className="form-row">
-          <div className="field">
-            <label htmlFor="upload-location-input">
-              Text after dot · (Location / Tag)
-            </label>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-              <span
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: "1.5rem", alignItems: "start" }}>
+              <div
                 style={{
-                  background: "rgba(0, 0, 0, 0.4)",
-                  padding: "0.45rem 0.65rem",
-                  borderRadius: "3px",
-                  fontSize: "0.82rem",
-                  color: "var(--soft-white)",
+                  borderRadius: "4px",
+                  overflow: "hidden",
                   border: "1px solid var(--dark-border)",
-                  whiteSpace: "nowrap",
-                  fontWeight: "600",
+                  background: "var(--dark-red)",
+                  aspectRatio: "16/10",
                 }}
               >
-                {selectedProject ? selectedProject.category.replace(" Photography", "") : "Discipline"} ·
-              </span>
-              <input
-                id="upload-location-input"
-                type="text"
-                placeholder={
-                  selectedProject
-                    ? `e.g. ${selectedProject.location || "Thrissur, Kerala"}`
-                    : "e.g. Kerala, Thrissur"
-                }
-                value={uploadLocation}
-                onChange={(e) => setUploadLocation(e.target.value)}
-                style={{ flex: 1 }}
-              />
-            </div>
-            <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.25rem", display: "block" }}>
-              The discipline name ({selectedProject ? selectedProject.category.replace(" Photography", "") : "Wedding, Fashion, etc."}) remains constant. The text you enter here appears after the dot (e.g. Wedding · {uploadLocation || "Kerala"}).
-            </span>
-          </div>
-        </div>
+                <img
+                  src={activeProject.cover}
+                  alt={activeProject.title}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              </div>
 
-        {stagedFiles.length > 0 && (
-          <div className="field" style={{ marginTop: "0.4rem" }}>
-            <label style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)" }}>
-              Selected files ready to add ({stagedFiles.length}):
-            </label>
-            <div className="thumbs" style={{ marginTop: "0.6rem", display: "flex", flexWrap: "wrap", gap: "0.7rem" }}>
-              {stagedFiles.map((item, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    position: "relative",
-                    width: 96,
-                    height: 72,
-                    borderRadius: "4px",
-                    overflow: "hidden",
-                    border: "1px solid var(--dark-border)",
-                    background: "var(--dark-red)",
-                  }}
-                >
-                  <img
-                    src={item.dataUrl}
-                    alt={item.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeStaged(idx)}
-                    title="Remove from selection"
-                    style={{
-                      position: "absolute",
-                      top: 3,
-                      right: 3,
-                      background: "rgba(0, 0, 0, 0.75)",
-                      color: "#ff8b8b",
-                      border: 0,
-                      borderRadius: "50%",
-                      width: 20,
-                      height: 20,
-                      cursor: "pointer",
-                      display: "grid",
-                      placeItems: "center",
-                      fontSize: "11px",
-                      lineHeight: 1,
-                    }}
-                  >
-                    ✕
-                  </button>
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      background: "rgba(0, 0, 0, 0.78)",
-                      fontSize: "9px",
-                      padding: "2px 4px",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      color: "var(--sand)",
-                    }}
-                  >
-                    {item.name}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", marginTop: "0.4rem" }}>
-          <button className="btn btn-sand" type="submit" style={{ width: "fit-content" }} disabled={uploading}>
-            Add to gallery {stagedFiles.length > 0 ? `(${stagedFiles.length})` : ""}
-          </button>
-          {stagedFiles.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={() => setStagedFiles([])}
-              style={{ borderColor: "var(--sand)", color: "var(--sand)", padding: "0.55rem 0.9rem" }}
-            >
-              Clear selection
-            </button>
-          )}
-        </div>
-      </form>
-
-      <div style={{ marginTop: "2rem", marginBottom: "0.8rem" }}>
-        <div className="admin-type-tabs" role="tablist" aria-label="Filter photographs by discipline">
-          <button
-            type="button"
-            className={`admin-type-btn ${typeFilter === "all" ? "active" : ""}`}
-            onClick={() => {
-              setTypeFilter("all");
-              setFilterCategory("all");
-              setFilterProject("all");
-            }}
-          >
-            All Disciplines
-          </button>
-          <button
-            type="button"
-            className={`admin-type-btn ${typeFilter === "photography" ? "active" : ""}`}
-            onClick={() => {
-              setTypeFilter("photography");
-              setFilterCategory("all");
-              setFilterProject("all");
-            }}
-          >
-            📷 Photography
-          </button>
-          <button
-            type="button"
-            className={`admin-type-btn ${typeFilter === "videography" ? "active" : ""}`}
-            onClick={() => {
-              setTypeFilter("videography");
-              setFilterCategory("all");
-              setFilterProject("all");
-            }}
-          >
-            🎬 Videography (BTS & Stills)
-          </button>
-        </div>
-      </div>
-
-      <div className="admin-top" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em", fontSize: "1.8rem", margin: 0 }}>
-          PROJECT PHOTOGRAPHS ({photos.length})
-        </h2>
-        <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", alignItems: "center" }}>
-          <select
-            value={filterCategory}
-            onChange={(e) => {
-              setFilterCategory(e.target.value);
-              setFilterProject("all");
-            }}
-            style={{
-              background: "var(--dark-red-elevated)",
-              color: "var(--stone)",
-              border: "1px solid var(--dark-border)",
-              padding: "0.45rem 0.7rem",
-              fontSize: "0.85rem",
-            }}
-          >
-            <option value="all">All Categories</option>
-            {availableCategories.map((c) => (
-              <option key={c} value={c}>
-                {c.replace(/ Photography$/i, "")}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-            style={{
-              background: "var(--dark-red-elevated)",
-              color: "var(--stone)",
-              border: "1px solid var(--dark-border)",
-              padding: "0.45rem 0.7rem",
-              fontSize: "0.85rem",
-            }}
-          >
-            <option value="all">All projects</option>
-            {filteredProjectsForSelect.map((p) => {
-              const isVideo = p.type === "videography";
-              const isPub = p.status === "published";
-              return (
-                <option key={p.id} value={p.id}>
-                  [{isVideo ? "VIDEO" : "PHOTO"} · {isPub ? "LIVE" : "DRAFT"}] {p.title}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-      </div>
-
-      <div className="photo-admin-grid">
-        {photos.map((ph, i) => {
-          const currentLoc =
-            (ph.project.photoLocations && ph.project.photoLocations[ph.src]) ||
-            ph.project.location ||
-            "";
-          const disciplineName = ph.project.category.replace(" Photography", "");
-          const isPub = ph.project.status === "published";
-
-          return (
-            <figure key={`${ph.project.id}-${ph.kind}-${ph.galleryIndex}-${i}`}>
-              <img src={ph.src} alt="" />
-              <figcaption>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontWeight: 600, color: "var(--stone)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    {ph.kind === "cover" ? "Cover Photo" : "Gallery Frame"}
-                    <span className={`pill ${isPub ? "pub" : "draft"}`} style={{ fontSize: "0.58rem", padding: "1px 4px" }}>
-                      {isPub ? "LIVE" : "DRAFT"}
-                    </span>
-                  </span>
-                  <div style={{ display: "flex", gap: "0.6rem" }}>
-                    {ph.kind === "gallery" && (
-                      <button
-                        type="button"
-                        onClick={() => setAsCover(ph)}
-                        title="Make this the project cover"
-                        style={{
-                          background: "transparent",
-                          border: 0,
-                          color: "var(--sand)",
-                          cursor: "pointer",
-                          fontSize: "0.68rem",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.08em",
-                          padding: 0,
-                          textDecoration: "underline",
-                        }}
-                      >
-                        Set Cover
-                      </button>
-                    )}
-                    {ph.kind === "gallery" && (
-                      <button
-                        type="button"
-                        onClick={() => removePhotoFromProject(ph)}
-                        title="Remove photograph from gallery"
-                        style={{
-                          background: "transparent",
-                          border: 0,
-                          color: "#e7b3b3",
-                          cursor: "pointer",
-                          fontSize: "0.68rem",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.08em",
-                          padding: 0,
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ marginTop: "0.4rem", paddingTop: "0.4rem", borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+                <div className="field">
+                  <label>Cover Caption &amp; Location (Text after dot ·)</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                     <span
                       style={{
-                        fontSize: "0.68rem",
-                        fontWeight: "600",
-                        color: "var(--soft-white)",
                         background: "rgba(0, 0, 0, 0.45)",
-                        padding: "0.22rem 0.45rem",
-                        borderRadius: "2px",
-                        letterSpacing: "0.04em",
-                        whiteSpace: "nowrap",
+                        padding: "0.45rem 0.65rem",
+                        borderRadius: "3px",
+                        fontSize: "0.82rem",
+                        color: "var(--soft-white)",
                         border: "1px solid var(--dark-border)",
+                        whiteSpace: "nowrap",
+                        fontWeight: "600",
                       }}
-                      title="Discipline type (constant)"
                     >
-                      {disciplineName} ·
+                      {activeProject.category.replace(" Photography", "")} ·
                     </span>
                     <input
                       type="text"
-                      key={currentLoc}
-                      defaultValue={currentLoc}
+                      key={activeProject.location || ""}
+                      defaultValue={activeProject.location || ""}
                       placeholder="e.g. Kerala, Thrissur"
-                      onBlur={(e) => updatePhotoLocation(ph, e.target.value)}
+                      onBlur={(e) => updatePhotoLocation(activeProject.cover, e.target.value, true)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
                           e.target.blur();
                         }
                       }}
-                      title="Edit text after dot. Press Enter or click away to save."
-                      style={{
-                        fontSize: "0.72rem",
-                        padding: "0.22rem 0.45rem",
-                        background: "rgba(0, 0, 0, 0.3)",
-                        border: "1px solid var(--dark-border)",
-                        color: "var(--stone)",
-                        borderRadius: "2px",
-                        flex: 1,
-                        minWidth: 0,
-                      }}
+                      title="Press Enter or click away to save caption."
+                      style={{ flex: 1 }}
                     />
                   </div>
-                  <div
-                    style={{
-                      fontSize: "0.6rem",
-                      color: "var(--muted)",
-                      marginTop: "0.22rem",
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span>Text after dot “·”</span>
-                    <span>Enter to save</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.2rem" }}>
+                    Press Enter or click away to save caption changes.
+                  </span>
+                </div>
+
+                <div className="field">
+                  <label>Replace Cover: Upload from device {uploadingCover ? "(Processing…)" : ""}</label>
+                  <input
+                    ref={coverFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingCover}
+                    onChange={handleCoverFileUpload}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Or paste new cover image URL</label>
+                  <div style={{ display: "flex", gap: "0.6rem" }}>
+                    <input
+                      type="url"
+                      placeholder="https://example.com/cover.jpg"
+                      value={coverUrlInput}
+                      onChange={(e) => setCoverUrlInput(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={handleCoverUrlSubmit}
+                      style={{ borderColor: "var(--sand)", color: "var(--sand)", whiteSpace: "nowrap" }}
+                    >
+                      Apply Cover
+                    </button>
                   </div>
                 </div>
-              </figcaption>
-            </figure>
-          );
-        })}
-      </div>
-      {!photos.length && (
-        <p className="empty-state" style={{ marginTop: "1rem" }}>
-          No photographs match this category or project filter.
-        </p>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: ADD PHOTOS TO THIS PROJECT */}
+          <form className="admin-card form-grid" onSubmit={addPhotosToGallery} style={{ marginBottom: "1.8rem" }}>
+            <h2 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em", fontSize: "1.3rem", margin: 0 }}>
+              ADD PHOTOS TO {activeProject.title.toUpperCase()}
+            </h2>
+
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="gallery-file-input">
+                  Choose photo file(s) from device {uploading ? "(Uploading…)" : ""}
+                </label>
+                <input
+                  id="gallery-file-input"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={uploading}
+                  onChange={onFilesChosen}
+                  style={{ marginTop: "0.4rem" }}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="gallery-url-input">Or paste photo image URL</label>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <input
+                    id="gallery-url-input"
+                    type="url"
+                    placeholder="https://example.com/photo.jpg"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addUrlToStaged();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={addUrlToStaged}
+                    style={{ borderColor: "var(--sand)", color: "var(--sand)", height: "42px" }}
+                  >
+                    Stage
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Caption &amp; Location (Text after dot ·)</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                <span
+                  style={{
+                    background: "rgba(0, 0, 0, 0.45)",
+                    padding: "0.45rem 0.65rem",
+                    borderRadius: "3px",
+                    fontSize: "0.82rem",
+                    color: "var(--soft-white)",
+                    border: "1px solid var(--dark-border)",
+                    whiteSpace: "nowrap",
+                    fontWeight: "600",
+                  }}
+                >
+                  {activeProject.category.replace(" Photography", "")} ·
+                </span>
+                <input
+                  type="text"
+                  placeholder={`e.g. ${activeProject.location || "Kerala, India"}`}
+                  value={uploadLocation}
+                  onChange={(e) => setUploadLocation(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+
+            {stagedFiles.length > 0 && (
+              <div className="field">
+                <label style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)" }}>
+                  Ready to add ({stagedFiles.length}):
+                </label>
+                <div className="thumbs" style={{ marginTop: "0.6rem", display: "flex", flexWrap: "wrap", gap: "0.7rem" }}>
+                  {stagedFiles.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: "relative",
+                        width: 96,
+                        height: 72,
+                        borderRadius: "4px",
+                        overflow: "hidden",
+                        border: "1px solid var(--dark-border)",
+                        background: "var(--dark-red)",
+                      }}
+                    >
+                      <img
+                        src={item.dataUrl}
+                        alt={item.name}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeStaged(idx)}
+                        title="Remove from selection"
+                        style={{
+                          position: "absolute",
+                          top: 3,
+                          right: 3,
+                          background: "rgba(0, 0, 0, 0.75)",
+                          color: "#ff8b8b",
+                          border: 0,
+                          borderRadius: "50%",
+                          width: 20,
+                          height: 20,
+                          cursor: "pointer",
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: "11px",
+                          lineHeight: 1,
+                        }}
+                      >
+                        ✕
+                      </button>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          background: "rgba(0, 0, 0, 0.78)",
+                          fontSize: "9px",
+                          padding: "2px 4px",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          color: "var(--sand)",
+                        }}
+                      >
+                        {item.name}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "0.8rem", alignItems: "center" }}>
+              <button className="btn btn-sand" type="submit" disabled={uploading} style={{ width: "fit-content" }}>
+                Add to Project Gallery {stagedFiles.length > 0 ? `(${stagedFiles.length})` : ""}
+              </button>
+              {stagedFiles.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setStagedFiles([])}
+                  style={{ borderColor: "var(--sand)", color: "var(--sand)", padding: "0.55rem 0.9rem" }}
+                >
+                  Clear selection
+                </button>
+              )}
+            </div>
+          </form>
+
+          {/* SECTION 3: PROJECT GALLERY PHOTOS */}
+          <div className="admin-top" style={{ marginBottom: "1rem" }}>
+            <h2 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em", fontSize: "1.4rem", margin: 0 }}>
+              GALLERY PHOTOGRAPHS ({activeProject.gallery?.length || 0})
+            </h2>
+          </div>
+
+          {activeProject.gallery && activeProject.gallery.length > 0 ? (
+            <div className="photo-admin-grid">
+              {activeProject.gallery.map((src, idx) => {
+                const currentLoc =
+                  (activeProject.photoLocations && activeProject.photoLocations[src]) ||
+                  activeProject.location ||
+                  "";
+                const disciplineName = activeProject.category.replace(" Photography", "");
+
+                return (
+                  <figure key={`${activeProject.id}-gallery-${idx}`}>
+                    <img src={src} alt="" />
+                    <figcaption>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontWeight: 600, color: "var(--stone)", fontSize: "0.68rem" }}>
+                          Frame #{idx + 1}
+                        </span>
+                        <div style={{ display: "flex", gap: "0.55rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setAsCover(src, idx)}
+                            title="Make this the project cover"
+                            style={{
+                              background: "transparent",
+                              border: 0,
+                              color: "var(--sand)",
+                              cursor: "pointer",
+                              fontSize: "0.68rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.08em",
+                              padding: 0,
+                              textDecoration: "underline",
+                            }}
+                          >
+                            Set Cover
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removePhotoFromProject(idx)}
+                            title="Remove photograph from gallery"
+                            style={{
+                              background: "transparent",
+                              border: 0,
+                              color: "#e7b3b3",
+                              cursor: "pointer",
+                              fontSize: "0.68rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.08em",
+                              padding: 0,
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: "0.4rem", paddingTop: "0.4rem", borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                          <span
+                            style={{
+                              fontSize: "0.68rem",
+                              fontWeight: "600",
+                              color: "var(--soft-white)",
+                              background: "rgba(0, 0, 0, 0.45)",
+                              padding: "0.22rem 0.45rem",
+                              borderRadius: "2px",
+                              letterSpacing: "0.04em",
+                              whiteSpace: "nowrap",
+                              border: "1px solid var(--dark-border)",
+                            }}
+                          >
+                            {disciplineName} ·
+                          </span>
+                          <input
+                            type="text"
+                            defaultValue={currentLoc}
+                            placeholder="e.g. Kerala, Thrissur"
+                            onBlur={(e) => updatePhotoLocation(src, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.target.blur();
+                              }
+                            }}
+                            title="Press Enter or click away to save caption."
+                            style={{
+                              fontSize: "0.72rem",
+                              padding: "0.22rem 0.45rem",
+                              background: "rgba(0, 0, 0, 0.3)",
+                              border: "1px solid var(--dark-border)",
+                              color: "var(--stone)",
+                              borderRadius: "2px",
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          />
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "0.6rem",
+                            color: "var(--muted)",
+                            marginTop: "0.22rem",
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <span>Text after dot “·”</span>
+                          <span>Enter to save</span>
+                        </div>
+                      </div>
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="admin-card empty-state" style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
+              <p style={{ margin: 0, color: "var(--muted)" }}>
+                No gallery photographs added yet for “{activeProject.title}”.
+              </p>
+              <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "var(--stone)" }}>
+                Use the form above to upload images directly from your device or stage image URLs.
+              </p>
+            </div>
+          )}
+
+          <div style={{ marginTop: "2rem" }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => selectProject(null)}
+              style={{ borderColor: "var(--dark-border)", color: "var(--stone)" }}
+            >
+              ← Back to All Projects
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* VIEW B: ALL PROJECTS GROUPED OVERVIEW MODE */
+        <div>
+          <div className="admin-top">
+            <h1>PROJECT PHOTOS &amp; MEDIA</h1>
+          </div>
+          <div className="demo-banner">
+            Select a project below to manage its cover photograph and gallery images. Changes save directly to
+            MongoDB Atlas.
+          </div>
+
+          {/* Top Category Tabs */}
+          <div style={{ marginBottom: "1.2rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.8rem" }}>
+            <div className="admin-type-tabs" role="tablist" aria-label="Filter projects by discipline">
+              <button
+                type="button"
+                className={`admin-type-btn ${typeFilter === "all" ? "active" : ""}`}
+                onClick={() => setTypeFilter("all")}
+              >
+                All Projects ({projects.length})
+              </button>
+              <button
+                type="button"
+                className={`admin-type-btn ${typeFilter === "photography" ? "active" : ""}`}
+                onClick={() => setTypeFilter("photography")}
+              >
+                📷 Photography ({photoCount})
+              </button>
+              <button
+                type="button"
+                className={`admin-type-btn ${typeFilter === "videography" ? "active" : ""}`}
+                onClick={() => setTypeFilter("videography")}
+              >
+                🎬 Videography ({videoCount})
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search by title, category, location…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                background: "var(--dark-red-elevated)",
+                border: "1px solid var(--dark-border)",
+                color: "var(--stone)",
+                padding: "0.45rem 0.8rem",
+                borderRadius: "3px",
+                fontSize: "0.85rem",
+                minWidth: "240px",
+              }}
+            />
+          </div>
+
+          {/* Projects Grouped Table / Cards */}
+          <div className="admin-card" style={{ overflowX: "auto" }}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 70 }}>Cover</th>
+                  <th>Project Name</th>
+                  <th>Category</th>
+                  <th>Type</th>
+                  <th>Images</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProjects.map((p) => {
+                  const isVideo = p.type === "videography";
+                  const isPub = p.status === "published";
+                  const galleryCount = (p.gallery || []).length;
+                  const totalImages = (p.cover ? 1 : 0) + galleryCount;
+
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <div
+                          style={{
+                            width: 58,
+                            height: 44,
+                            borderRadius: "3px",
+                            overflow: "hidden",
+                            background: "var(--dark-red)",
+                            border: "1px solid var(--dark-border)",
+                          }}
+                        >
+                          {p.cover ? (
+                            <img
+                              src={p.cover}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                            />
+                          ) : (
+                            <div style={{ display: "grid", placeItems: "center", height: "100%", fontSize: "0.6rem", color: "var(--muted)" }}>
+                              No Cover
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <strong style={{ color: "var(--stone)", fontSize: "0.92rem", display: "block" }}>
+                          {p.title}
+                        </strong>
+                        <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                          {p.location || "Kerala, India"}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "0.85rem", color: "var(--soft-white)" }}>
+                          {p.category}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`pill ${isVideo ? "video" : "photo"}`}>
+                          {isVideo ? "Videography" : "Photography"}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "0.85rem", color: "var(--stone)", fontWeight: 500 }}>
+                          {totalImages} {totalImages === 1 ? "image" : "images"}
+                        </span>
+                        <span style={{ display: "block", fontSize: "0.7rem", color: "var(--muted)" }}>
+                          1 Cover · {galleryCount} Gallery
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`pill ${isPub ? "pub" : "draft"}`}>
+                          {isPub ? "LIVE" : "DRAFT"}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          type="button"
+                          className="btn btn-sand"
+                          onClick={() => selectProject(p.id)}
+                          style={{
+                            padding: "0.4rem 0.8rem",
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.08em",
+                          }}
+                        >
+                          Manage Photos →
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {!filteredProjects.length && (
+              <p className="empty-state" style={{ margin: "2rem 0", textAlign: "center" }}>
+                No projects match the selected filter.
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </>
   );

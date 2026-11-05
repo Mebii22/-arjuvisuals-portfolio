@@ -1,11 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
-const { adminLogin } = require("../controllers/authController");
+const { adminLogin, changePassword } = require("../controllers/authController");
 const protectAdmin = require("../middleware/authMiddleware");
 
 // Public admin login
 router.post("/login", adminLogin);
+
+// Protected change password
+router.put("/password", protectAdmin, changePassword);
 
 // Protected admin profile
 router.get("/me", protectAdmin, (req, res) => {

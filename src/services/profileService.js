@@ -26,7 +26,27 @@ export const profileService = {
     if (API_CONFIG.USE_API) {
       try {
         const res = await apiRequest("/profile");
-        if (res) return res?.data || res;
+        const doc = res?.data || res;
+        if (doc) {
+          const merged = {
+            ...defaultProfile,
+            ...doc,
+            email: doc.email || defaultProfile.email,
+            phone: doc.phone || defaultProfile.phone,
+            whatsapp: doc.whatsapp || defaultProfile.whatsapp,
+            instagram: doc.instagram || defaultProfile.instagram,
+            instagramHandle: doc.instagramHandle || defaultProfile.instagramHandle,
+            location: doc.location || defaultProfile.location,
+            homeHeroPortrait: doc.homeHeroPortrait || doc.portraitCutout || doc.portrait || defaultProfile.homeHeroPortrait,
+            homeAboutPortrait: doc.homeAboutPortrait || doc.portraitAlt || defaultProfile.homeAboutPortrait,
+            aboutMainPortrait: doc.aboutMainPortrait || doc.aboutPortrait || defaultProfile.aboutMainPortrait,
+            aboutPolaroid: doc.aboutPolaroid || defaultProfile.aboutPolaroid,
+            aboutPolaroidCaption: doc.aboutPolaroidCaption || defaultProfile.aboutPolaroidCaption,
+            aboutPolaroidMeta: doc.aboutPolaroidMeta || defaultProfile.aboutPolaroidMeta,
+          };
+          storage.write(KEYS.profile, merged);
+          return merged;
+        }
       } catch {
         // Fall back gracefully to stored profile
       }
@@ -56,7 +76,27 @@ export const profileService = {
           method: "PUT",
           body: JSON.stringify(payload),
         });
-        if (res) return res?.data || res;
+        const doc = res?.data || res;
+        if (doc) {
+          const merged = {
+            ...defaultProfile,
+            ...doc,
+            email: doc.email || defaultProfile.email,
+            phone: doc.phone || defaultProfile.phone,
+            whatsapp: doc.whatsapp || defaultProfile.whatsapp,
+            instagram: doc.instagram || defaultProfile.instagram,
+            instagramHandle: doc.instagramHandle || defaultProfile.instagramHandle,
+            location: doc.location || defaultProfile.location,
+            homeHeroPortrait: doc.homeHeroPortrait || doc.portraitCutout || doc.portrait || defaultProfile.homeHeroPortrait,
+            homeAboutPortrait: doc.homeAboutPortrait || doc.portraitAlt || defaultProfile.homeAboutPortrait,
+            aboutMainPortrait: doc.aboutMainPortrait || doc.aboutPortrait || defaultProfile.aboutMainPortrait,
+            aboutPolaroid: doc.aboutPolaroid || defaultProfile.aboutPolaroid,
+            aboutPolaroidCaption: doc.aboutPolaroidCaption || defaultProfile.aboutPolaroidCaption,
+            aboutPolaroidMeta: doc.aboutPolaroidMeta || defaultProfile.aboutPolaroidMeta,
+          };
+          storage.write(KEYS.profile, merged);
+          return merged;
+        }
       } catch {
         // Fall back gracefully to local storage update
       }

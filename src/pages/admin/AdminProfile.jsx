@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import SEO from "../../components/SEO";
 import { profileService } from "../../services/profileService";
+import { authService } from "../../services/authService";
 import { defaultProfile } from "../../data/photographer";
 import { API_CONFIG, apiRequest } from "../../services/api";
 import { useToast } from "../../context/ToastContext";
@@ -9,12 +10,53 @@ import { compressImageFile } from "../../utils/imageUtils";
 export default function AdminProfile() {
   const toast = useToast();
   const [form, setForm] = useState(defaultProfile);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
     profileService.get().then(setForm).catch(() => {});
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handlePasswordChange = (field, val) => {
+    setPasswordForm((prev) => ({ ...prev, [field]: val }));
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!passwordForm.currentPassword) {
+      toast.push("Please enter your current password.", "err");
+      return;
+    }
+    if (!passwordForm.newPassword || passwordForm.newPassword.length < 8) {
+      toast.push("New password must be at least 8 characters long.", "err");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.push("New passwords do not match.", "err");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      await authService.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      });
+      toast.push("Password updated successfully.");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err) {
+      toast.push(err.message || "Failed to update password.", "err");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   const handlePhotoUpload = async (field, file, label) => {
     if (!file) return;
@@ -51,15 +93,19 @@ export default function AdminProfile() {
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
-    await profileService.update({
-      ...form,
-      specialties,
-      portrait: form.homeHeroPortrait || form.portrait,
-      portraitCutout: form.homeHeroPortrait || form.portraitCutout,
-      portraitAlt: form.homeAboutPortrait || form.portraitAlt,
-      aboutPortrait: form.aboutMainPortrait || form.aboutPortrait,
-    });
-    toast.push("All 4 photos and profile saved in this browser.");
+    try {
+      await profileService.update({
+        ...form,
+        specialties,
+        portrait: form.homeHeroPortrait || form.portrait,
+        portraitCutout: form.homeHeroPortrait || form.portraitCutout,
+        portraitAlt: form.homeAboutPortrait || form.portraitAlt,
+        aboutPortrait: form.aboutMainPortrait || form.aboutPortrait,
+      });
+      toast.push("Profile and photographer photos saved successfully.");
+    } catch (err) {
+      toast.push(err.message || "Could not save profile.", "err");
+    }
   };
 
   return (
@@ -69,8 +115,8 @@ export default function AdminProfile() {
         <h1>PROFILE</h1>
       </div>
       <div className="demo-banner">
-        Biography and contact fields here drive the public site in this prototype. Social links stay hidden on
-        the public pages until they contain a real URL or number.
+        Biography, photos, and contact fields saved here automatically sync with MongoDB Atlas and display across
+        the public portfolio website.
       </div>
 
       <form className="admin-card form-grid" onSubmit={save}>
@@ -436,6 +482,64 @@ export default function AdminProfile() {
 
         <button className="btn btn-sand" type="submit" style={{ width: "fit-content" }}>
           Save profile
+        </button>
+      </form>
+
+      <form className="admin-card form-grid" onSubmit={handlePasswordSubmit} style={{ marginTop: "2rem" }}>
+        <p className="kicker">Security</p>
+        <h2 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em", fontSize: "1.3rem", margin: 0 }}>
+          CHANGE PASSWORD
+        </h2>
+        <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: 0 }}>
+          Update your administrator login password. Minimum 8 characters.
+        </p>
+
+        <div className="field">
+          <label>Current Password <span className="req">*</span></label>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={passwordForm.currentPassword}
+            onChange={(e) => handlePasswordChange("currentPassword", e.target.value)}
+            placeholder="Enter current password"
+            required
+          />
+        </div>
+
+        <div className="form-row">
+          <div className="field">
+            <label>New Password <span className="req">*</span></label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={passwordForm.newPassword}
+              onChange={(e) => handlePasswordChange("newPassword", e.target.value)}
+              placeholder="Minimum 8 characters"
+              minLength={8}
+              required
+            />
+          </div>
+          <div className="field">
+            <label>Confirm New Password <span className="req">*</span></label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => handlePasswordChange("confirmPassword", e.target.value)}
+              placeholder="Re-enter new password"
+              minLength={8}
+              required
+            />
+          </div>
+        </div>
+
+        <button
+          className="btn btn-sand"
+          type="submit"
+          disabled={passwordLoading}
+          style={{ width: "fit-content" }}
+        >
+          {passwordLoading ? "Updating…" : "Update Password"}
         </button>
       </form>
     </>
