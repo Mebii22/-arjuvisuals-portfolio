@@ -11,7 +11,7 @@ export default function AdminProfile() {
   const [form, setForm] = useState(defaultProfile);
 
   useEffect(() => {
-    profileService.get().then(setForm);
+    profileService.get().then(setForm).catch(() => {});
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));

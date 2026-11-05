@@ -1,9 +1,14 @@
 import { defaultInquiries } from "../data/demoInquiries";
 import { API_CONFIG, apiRequest, storage, KEYS } from "./api";
 
-if (!storage.read(KEYS.inquiries, null)) {
-  storage.write(KEYS.inquiries, defaultInquiries);
-}
+const mapInquiry = (i) => {
+  if (!i) return null;
+  return {
+    ...i,
+    id: i._id || i.id,
+    _id: i._id || i.id,
+  };
+};
 
 const local = {
   all() {
@@ -20,27 +25,38 @@ export const inquiryService = {
     if (API_CONFIG.USE_API) {
       try {
         const res = await apiRequest("/inquiries");
-        return Array.isArray(res) ? res : res?.data || local.all();
-      } catch {
-        return local.all();
+        const list = Array.isArray(res) ? res : res?.data || [];
+        return list.map(mapInquiry);
+      } catch (err) {
+        console.warn("API inquiry listing failed, falling back to local storage:", err.message);
+        return local.all().map(mapInquiry);
       }
     }
-    return local.all();
+    return local.all().map(mapInquiry);
   },
+
   async getById(id) {
-    return local.all().find((i) => i.id === id) || null;
-  },
-  async create(payload) {
     if (API_CONFIG.USE_API) {
       try {
-        const res = await apiRequest("/inquiries", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        return res?.data || res;
+        const res = await apiRequest(`/inquiries/${id}`);
+        const data = res && res.data ? res.data : res;
+        return mapInquiry(data);
       } catch {
-        // Fall back to local creation below
+        // Fall back to local
       }
+    }
+    const item = local.all().find((i) => i.id === id || i._id === id);
+    return item ? mapInquiry(item) : null;
+  },
+
+  async create(payload) {
+    if (API_CONFIG.USE_API) {
+      const res = await apiRequest("/inquiries", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const data = res && res.data ? res.data : res;
+      return mapInquiry(data);
     }
     const item = {
       ...payload,
@@ -53,13 +69,27 @@ export const inquiryService = {
     local.save([item, ...local.all()]);
     return item;
   },
+
   async update(id, payload) {
+    if (API_CONFIG.USE_API) {
+      const res = await apiRequest(`/inquiries/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      const data = res && res.data ? res.data : res;
+      return mapInquiry(data);
+    }
     const next = local.all().map((i) => (i.id === id ? { ...i, ...payload, id } : i));
     local.save(next);
     return next.find((i) => i.id === id);
   },
+
   async remove(id) {
-    local.save(local.all().filter((i) => i.id !== id));
+    if (API_CONFIG.USE_API) {
+      await apiRequest(`/inquiries/${id}`, { method: "DELETE" });
+      return true;
+    }
+    local.save(local.all().filter((i) => i.id !== id && i._id !== id));
     return true;
   },
 };

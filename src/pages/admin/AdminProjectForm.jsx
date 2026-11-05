@@ -63,7 +63,7 @@ export default function AdminProjectForm() {
             setVideoPreviewUrl(activePlayable);
           }
         }
-      });
+      }).catch(() => {});
     }
   }, [id, isNew]);
 

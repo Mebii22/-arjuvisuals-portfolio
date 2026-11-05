@@ -19,7 +19,11 @@ export default function AdminPhotos() {
   const [filterProject, setFilterProject] = useState("all");
   const [uploading, setUploading] = useState(false);
 
-  const load = () => projectService.list({ includeDrafts: true }).then(setProjects);
+  const load = () =>
+    projectService
+      .list({ includeDrafts: true })
+      .then(setProjects)
+      .catch((err) => toast.push(err.message || "Could not load projects.", "err"));
   useEffect(() => {
     load();
   }, []);

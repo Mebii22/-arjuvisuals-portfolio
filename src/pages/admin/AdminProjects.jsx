@@ -17,7 +17,11 @@ export default function AdminProjects() {
   const [confirm, setConfirm] = useState(null);
   const [migrating, setMigrating] = useState(false);
 
-  const load = () => projectService.list({ includeDrafts: true }).then(setProjects);
+  const load = () =>
+    projectService
+      .list({ includeDrafts: true })
+      .then(setProjects)
+      .catch((err) => toast.push(err.message || "Could not load projects.", "err"));
 
   useEffect(() => {
     load();

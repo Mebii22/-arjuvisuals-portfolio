@@ -3,9 +3,23 @@
  * Flip USE_API to true and set VITE_API_URL when the Node/Express
  * backend and Cloudinary uploads are ready.
  */
+const getBaseUrl = () => {
+  let url = import.meta.env.VITE_API_URL;
+  if (!url) {
+    url = import.meta.env.PROD
+      ? "https://arjuvisuals-api.onrender.com/api"
+      : "http://localhost:5001/api";
+  }
+  url = String(url).trim().replace(/\/+$/, "");
+  if (!url.endsWith("/api")) {
+    url = `${url}/api`;
+  }
+  return url;
+};
+
 export const API_CONFIG = {
   USE_API: true,
-  BASE_URL: (import.meta.env.VITE_API_URL || "http://localhost:5001/api").replace(/\/+$/, ""),
+  BASE_URL: getBaseUrl(),
 };
 
 export async function apiRequest(path, options = {}) {

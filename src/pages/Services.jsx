@@ -14,6 +14,7 @@ export default function Services() {
     serviceService
       .list()
       .then((data) => setServices(data || []))
+      .catch(() => setServices([]))
       .finally(() => setLoading(false));
   }, []);
 

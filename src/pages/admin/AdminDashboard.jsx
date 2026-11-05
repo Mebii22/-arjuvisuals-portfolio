@@ -10,8 +10,8 @@ export default function AdminDashboard() {
   const [inquiries, setInquiries] = useState([]);
 
   useEffect(() => {
-    projectService.list({ includeDrafts: true }).then(setProjects);
-    inquiryService.list().then(setInquiries);
+    projectService.list({ includeDrafts: true }).then(setProjects).catch(() => setProjects([]));
+    inquiryService.list().then(setInquiries).catch(() => setInquiries([]));
   }, []);
 
   const total = projects.length;

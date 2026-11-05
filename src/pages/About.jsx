@@ -25,8 +25,8 @@ export default function About() {
   const wa = formatWhatsAppUrl(profile.whatsapp);
 
   useEffect(() => {
-    projectService.list().then((list) => setProjects(list || []));
-    serviceService.list().then((list) => setServices(list || []));
+    projectService.list().then((list) => setProjects(list || [])).catch(() => setProjects([]));
+    serviceService.list().then((list) => setServices(list || [])).catch(() => setServices([]));
   }, []);
 
   const paras = (profile.biography || "").split("\n").filter(Boolean);

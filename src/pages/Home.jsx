@@ -18,7 +18,7 @@ export default function Home() {
   const [projects, setProjects] = useState([]);
 
   useEffect(() => {
-    projectService.list().then(setProjects);
+    projectService.list().then(setProjects).catch(() => setProjects([]));
   }, []);
 
   // Dynamically derive category spots from published projects only

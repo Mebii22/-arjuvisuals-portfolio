@@ -359,22 +359,29 @@ export const mapFrontendToBackend = (f) => {
 export const projectService = {
   async list({ includeDrafts = false, status = "all" } = {}) {
     if (API_CONFIG.USE_API) {
-      let endpoint = "/projects";
-      if (includeDrafts) {
-        endpoint = "/projects/admin/all";
-        if (status && status !== "all") {
-          endpoint += `?status=${encodeURIComponent(status)}`;
+      try {
+        let endpoint = "/projects";
+        if (includeDrafts) {
+          endpoint = "/projects/admin/all";
+          if (status && status !== "all") {
+            endpoint += `?status=${encodeURIComponent(status)}`;
+          }
+        } else {
+          const query = new URLSearchParams();
+          if (status && status !== "all") query.set("status", status);
+          const qs = query.toString();
+          if (qs) endpoint += `?${qs}`;
         }
-      } else {
-        const query = new URLSearchParams();
-        if (status && status !== "all") query.set("status", status);
-        const qs = query.toString();
-        if (qs) endpoint += `?${qs}`;
-      }
 
-      const res = await apiRequest(endpoint);
-      const rawList = Array.isArray(res) ? res : (res && res.data ? res.data : []);
-      return rawList.map(mapBackendToFrontend);
+        const res = await apiRequest(endpoint);
+        const rawList = Array.isArray(res) ? res : (res && res.data ? res.data : []);
+        return rawList.map(mapBackendToFrontend);
+      } catch (err) {
+        if (includeDrafts) {
+          throw err;
+        }
+        console.warn("API project listing failed, falling back to local storage:", err.message);
+      }
     }
     const all = local.all();
     if (status && status !== "all") {

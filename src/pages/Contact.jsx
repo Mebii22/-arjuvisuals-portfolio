@@ -49,6 +49,8 @@ export default function Contact() {
   useEffect(() => {
     serviceService.list().then((list) => {
       setServices(Array.isArray(list) ? list : []);
+    }).catch(() => {
+      setServices([]);
     });
   }, []);
 
@@ -114,9 +116,9 @@ export default function Contact() {
       setForm(empty);
       setTouched({});
       setErrors({});
-      toast.push("Inquiry saved! (Prototype demo stored in browser)", "ok");
-    } catch {
-      toast.push("Could not save the demo inquiry.", "err");
+      toast.push("Thank you! Your inquiry has been sent to Arjun Murali.", "ok");
+    } catch (err) {
+      toast.push(err.message || "Could not submit inquiry. Please try again or reach out directly.", "err");
     } finally {
       setSubmitting(false);
     }

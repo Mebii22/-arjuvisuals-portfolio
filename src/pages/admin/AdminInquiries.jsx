@@ -9,17 +9,26 @@ export default function AdminInquiries() {
   const [open, setOpen] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
-  const load = () => inquiryService.list().then(setList);
+  const load = () =>
+    inquiryService
+      .list()
+      .then(setList)
+      .catch((err) => toast.push(err.message || "Could not load inquiries.", "err"));
   useEffect(() => {
     load();
   }, []);
 
   const update = async (id, payload) => {
-    await inquiryService.update(id, payload);
-    load();
-    if (open?.id === id) {
-      const next = await inquiryService.getById(id);
-      setOpen(next);
+    try {
+      await inquiryService.update(id, payload);
+      toast.push("Inquiry updated.");
+      load();
+      if (open && (open.id === id || open._id === id)) {
+        const next = await inquiryService.getById(id);
+        setOpen(next);
+      }
+    } catch (err) {
+      toast.push(err.message || "Could not update inquiry.", "err");
     }
   };
 
@@ -30,8 +39,7 @@ export default function AdminInquiries() {
         <h1>INQUIRIES</h1>
       </div>
       <div className="demo-banner">
-        These records are <strong>demo data</strong> (plus any form tests from this browser). They were not
-        sent by real clients and have not been delivered to Arjun.
+        Live customer inquiries received through <strong>ArjuVisuals.co</strong>, stored securely in MongoDB Atlas.
       </div>
 
       <div className="admin-card" style={{ overflowX: "auto" }}>
@@ -70,7 +78,7 @@ export default function AdminInquiries() {
             ))}
           </tbody>
         </table>
-        {!list.length && <p className="empty-state">No inquiries in this browser yet.</p>}
+        {!list.length && <p className="empty-state">No customer inquiries received yet.</p>}
       </div>
 
       {open && (
@@ -94,6 +102,7 @@ export default function AdminInquiries() {
               <select value={open.status} onChange={(e) => update(open.id, { status: e.target.value })}>
                 <option value="new">New</option>
                 <option value="reviewed">Reviewed</option>
+                <option value="responded">Responded</option>
                 <option value="archived">Archived</option>
               </select>
             </div>
@@ -118,7 +127,9 @@ export default function AdminInquiries() {
             <h2 className="editorial" style={{ fontSize: "1.6rem" }}>
               Delete inquiry from {confirm.name}?
             </h2>
-            <p style={{ color: "var(--muted)", margin: "0.8rem 0 1.2rem" }}>Removes the demo record in this browser.</p>
+            <p style={{ color: "var(--muted)", margin: "0.8rem 0 1.2rem" }}>
+              This will permanently remove the inquiry from the database.
+            </p>
             <div className="admin-actions">
               <button
                 type="button"
