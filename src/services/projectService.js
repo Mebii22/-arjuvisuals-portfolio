@@ -253,24 +253,78 @@ export const mapBackendToFrontend = (b) => {
   const cover = b.cover || b.coverImage || b.thumbnail || "";
   const thumbnail = b.thumbnail || cover;
 
-  // Stills / gallery
-  const gallery = Array.isArray(b.gallery) && b.gallery.length > 0
+  // Stills / gallery with individual item metadata support
+  const rawGallery = Array.isArray(b.gallery) && b.gallery.length > 0
     ? b.gallery
     : (Array.isArray(b.images) && b.images.length > 0
       ? b.images
       : (Array.isArray(b.videoStills) && b.videoStills.length > 0 ? b.videoStills : []));
 
-  // Determine display category from subCategory, legacy map, or default
+  const photoLocations = b.photoLocations || {};
+  const gallery = rawGallery.map((item) => {
+    if (!item) return null;
+    if (typeof item === "string") {
+      return {
+        image: item,
+        location: photoLocations[item] || b.location || "",
+        caption: "",
+      };
+    }
+    return {
+      image: item.image || item.src || item.url || "",
+      location: item.location !== undefined ? item.location : (photoLocations[item.image || item.src] || b.location || ""),
+      caption: item.caption || item.alt || "",
+    };
+  }).filter(Boolean);
+
+  const rawStills = Array.isArray(b.videoStills) && b.videoStills.length > 0
+    ? b.videoStills
+    : gallery;
+  const videoStills = rawStills.map((item) => {
+    if (!item) return null;
+    if (typeof item === "string") {
+      return {
+        image: item,
+        location: photoLocations[item] || b.location || "",
+        caption: "",
+      };
+    }
+    return {
+      image: item.image || item.src || item.url || "",
+      location: item.location !== undefined ? item.location : (photoLocations[item.image || item.src] || b.location || ""),
+      caption: item.caption || item.alt || "",
+    };
+  }).filter(Boolean);
+
+  // Determine display category from subCategory, legacy map, title or default
   const slugKey = b.slug || (b.title ? projectService.slugify(b.title) : id);
   const matchedInfo =
     LEGACY_PROJECT_INFO[slugKey] ||
     LEGACY_PROJECT_INFO[id] ||
     LEGACY_PROJECT_INFO[b.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-")];
 
-  let category = b.category || b.subCategory || (matchedInfo ? matchedInfo.category : null);
-  if (!category || category === "photography" || category === "videography") {
-    category = isVideo ? "Cinematic Films" : "Wedding Photography";
+  let rawCat = b.category;
+  if (!rawCat || rawCat.toLowerCase() === "photography" || rawCat.toLowerCase() === "videography") {
+    rawCat = b.subCategory && b.subCategory.toLowerCase() !== "photography" && b.subCategory.toLowerCase() !== "videography"
+      ? b.subCategory
+      : (matchedInfo ? matchedInfo.category : null);
   }
+
+  if (!rawCat || rawCat.toLowerCase() === "photography" || rawCat.toLowerCase() === "videography") {
+    const titleLower = String(b.title || "").toLowerCase();
+    if (titleLower.includes("wedding film") || titleLower.includes("backwaters")) rawCat = "Wedding Films";
+    else if (titleLower.includes("cinematic") || titleLower.includes("monsoon")) rawCat = "Cinematic Films";
+    else if (titleLower.includes("commercial video") || titleLower.includes("makers")) rawCat = "Commercial Videos";
+    else if (titleLower.includes("wedding")) rawCat = "Wedding Photography";
+    else if (titleLower.includes("portrait")) rawCat = "Portrait Photography";
+    else if (titleLower.includes("nature")) rawCat = "Nature Photography";
+    else if (titleLower.includes("travel")) rawCat = "Travel Photography";
+    else if (titleLower.includes("fashion")) rawCat = "Fashion Photography";
+    else if (titleLower.includes("event")) rawCat = "Event Photography";
+    else if (titleLower.includes("product")) rawCat = "Product Photography";
+    else rawCat = isVideo ? "Cinematic Films" : "Wedding Photography";
+  }
+  const category = rawCat;
 
   return {
     ...b,
@@ -324,12 +378,43 @@ export const mapFrontendToBackend = (f) => {
     mapped.thumbnail = (f.thumbnail || c).trim();
   }
   if (f.gallery !== undefined || f.images !== undefined || f.videoStills !== undefined) {
-    const g = Array.isArray(f.gallery)
+    const rawG = Array.isArray(f.gallery)
       ? f.gallery
       : (Array.isArray(f.images) ? f.images : (Array.isArray(f.videoStills) ? f.videoStills : []));
-    mapped.gallery = g;
-    mapped.images = g;
-    mapped.videoStills = Array.isArray(f.videoStills) ? f.videoStills : g;
+
+    const photoLocations = { ...(f.photoLocations || {}) };
+    const cleanG = rawG.map((item) => {
+      if (typeof item === "string") return item;
+      if (item && item.image) {
+        if (item.location) photoLocations[item.image] = item.location;
+        return {
+          image: item.image,
+          location: item.location || "",
+          caption: item.caption || "",
+        };
+      }
+      return null;
+    }).filter(Boolean);
+
+    mapped.gallery = cleanG;
+    mapped.images = cleanG;
+    mapped.photoLocations = photoLocations;
+
+    if (f.videoStills !== undefined) {
+      mapped.videoStills = (Array.isArray(f.videoStills) ? f.videoStills : []).map((item) => {
+        if (typeof item === "string") return item;
+        if (item && item.image) {
+          return {
+            image: item.image,
+            location: item.location || "",
+            caption: item.caption || "",
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    } else {
+      mapped.videoStills = cleanG;
+    }
   }
   if (f.status !== undefined) {
     mapped.status = f.status === "published" ? "published" : "draft";

@@ -9,6 +9,18 @@ import { saveDeviceVideoFile, resolveVideoUrl, formatBytes } from "../../utils/v
 import { useToast } from "../../context/ToastContext";
 import { compressImageFile } from "../../utils/imageUtils";
 
+const normalizeMediaItem = (item, defaultLoc = "") => {
+  if (!item) return null;
+  if (typeof item === "string") {
+    return { image: item, location: defaultLoc || "", caption: "" };
+  }
+  return {
+    image: item.image || item.src || item.url || "",
+    location: item.location !== undefined ? item.location : (defaultLoc || ""),
+    caption: item.caption || item.alt || "",
+  };
+};
+
 const blank = {
   title: "",
   slug: "",
@@ -83,9 +95,12 @@ export default function AdminProjectForm() {
           if (p) {
             const projectType = p.type === "videography" ? "videography" : "photography";
             const coverImg = p.cover || p.thumbnail || p.coverImage || "";
-            const stills = Array.isArray(p.videoStills) && p.videoStills.length > 0
-              ? p.videoStills
-              : (Array.isArray(p.gallery) ? p.gallery : []);
+            const normGallery = (p.gallery || [])
+              .map((item) => normalizeMediaItem(item, p.location || ""))
+              .filter(Boolean);
+            const normStills = (p.videoStills || [])
+              .map((item) => normalizeMediaItem(item, p.location || ""))
+              .filter(Boolean);
 
             setForm({
               ...blank,
@@ -94,8 +109,8 @@ export default function AdminProjectForm() {
               category: p.category || (projectType === "videography" ? "Cinematic Films" : "Wedding Photography"),
               cover: coverImg,
               thumbnail: p.thumbnail || coverImg,
-              gallery: p.gallery || [],
-              videoStills: stills,
+              gallery: normGallery,
+              videoStills: normStills.length > 0 ? normStills : normGallery,
             });
 
             if (projectType === "videography" && p.videoUrl) {
@@ -131,7 +146,8 @@ export default function AdminProjectForm() {
     if (newType === form.type) return;
     setForm((prev) => {
       const typeDisciplines = disciplines.filter((d) => d.type === newType).map((d) => d.name);
-      const nextCategory = typeDisciplines[0] || (newType === "videography" ? "Cinematic Films" : "Wedding Photography");
+      const nextCategory =
+        typeDisciplines[0] || (newType === "videography" ? "Cinematic Films" : "Wedding Photography");
       return {
         ...prev,
         type: newType,
@@ -167,9 +183,7 @@ export default function AdminProjectForm() {
         })
       );
     } else {
-      return await Promise.all(
-        list.map((file) => compressImageFile(file, 1600, 1600, 0.85))
-      );
+      return await Promise.all(list.map((file) => compressImageFile(file, 1600, 1600, 0.85)));
     }
   };
 
@@ -197,7 +211,6 @@ export default function AdminProjectForm() {
     }
   };
 
-  // Cover URL manual application
   const applyCoverUrl = () => {
     const clean = coverUrlInput.trim();
     if (!clean) return;
@@ -220,9 +233,14 @@ export default function AdminProjectForm() {
       const urls = await uploadFilesToCloudinary(files);
       const valid = urls.filter(Boolean);
       if (valid.length > 0) {
+        const newItems = valid.map((url) => ({
+          image: url,
+          location: form.location || "",
+          caption: "",
+        }));
         setForm((prev) => ({
           ...prev,
-          gallery: [...prev.gallery, ...valid],
+          gallery: [...prev.gallery, ...newItems],
         }));
         toast.push(`${valid.length} photograph(s) added to gallery.`);
       }
@@ -239,10 +257,20 @@ export default function AdminProjectForm() {
     if (!clean) return;
     setForm((prev) => ({
       ...prev,
-      gallery: [...prev.gallery, clean],
+      gallery: [...prev.gallery, { image: clean, location: prev.location || "", caption: "" }],
     }));
     setGalleryUrlInput("");
     toast.push("Photo URL added to gallery.");
+  };
+
+  const updateGalleryPhoto = (index, field, value) => {
+    setForm((prev) => {
+      const nextGallery = [...prev.gallery];
+      if (nextGallery[index]) {
+        nextGallery[index] = { ...nextGallery[index], [field]: value };
+      }
+      return { ...prev, gallery: nextGallery };
+    });
   };
 
   const removeGalleryPhoto = (index) => {
@@ -262,10 +290,14 @@ export default function AdminProjectForm() {
       const urls = await uploadFilesToCloudinary(files);
       const valid = urls.filter(Boolean);
       if (valid.length > 0) {
+        const newItems = valid.map((url) => ({
+          image: url,
+          location: form.location || "",
+          caption: "",
+        }));
         setForm((prev) => ({
           ...prev,
-          videoStills: [...(prev.videoStills || []), ...valid],
-          gallery: [...(prev.gallery || []), ...valid],
+          videoStills: [...(prev.videoStills || []), ...newItems],
         }));
         toast.push(`${valid.length} video still(s) added.`);
       }
@@ -282,22 +314,27 @@ export default function AdminProjectForm() {
     if (!clean) return;
     setForm((prev) => ({
       ...prev,
-      videoStills: [...(prev.videoStills || []), clean],
-      gallery: [...(prev.gallery || []), clean],
+      videoStills: [...(prev.videoStills || []), { image: clean, location: prev.location || "", caption: "" }],
     }));
     setStillsUrlInput("");
     toast.push("Still URL added.");
   };
 
-  const removeVideoStill = (index) => {
+  const updateVideoStill = (index, field, value) => {
     setForm((prev) => {
-      const nextStills = (prev.videoStills || []).filter((_, i) => i !== index);
-      return {
-        ...prev,
-        videoStills: nextStills,
-        gallery: nextStills,
-      };
+      const nextStills = [...(prev.videoStills || [])];
+      if (nextStills[index]) {
+        nextStills[index] = { ...nextStills[index], [field]: value };
+      }
+      return { ...prev, videoStills: nextStills };
     });
+  };
+
+  const removeVideoStill = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      videoStills: (prev.videoStills || []).filter((_, i) => i !== index),
+    }));
   };
 
   // Video File Upload (Device -> Cloudinary)
@@ -353,10 +390,9 @@ export default function AdminProjectForm() {
       return;
     }
 
-    // Check duplicate locally first
     const exists = disciplines.some((d) => d.name.toLowerCase() === clean.toLowerCase());
     if (exists) {
-      toast.push(`Discipline "${clean}" already exists.`, "err");
+      toast.push(`Discipline “${clean}” already exists.`, "err");
       return;
     }
 
@@ -480,10 +516,12 @@ export default function AdminProjectForm() {
       </div>
 
       <form className="admin-card form-grid" onSubmit={(e) => e.preventDefault()}>
-        {/* SECTION 1: PROJECT BASIC INFORMATION */}
+        {/* ==========================================
+            SECTION 1: BASIC INFORMATION
+        =========================================== */}
         <p className="kicker">1 — Project Basic Information</p>
 
-        {/* Project Type & Publication Status */}
+        {/* Project Medium / Type & Status */}
         <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start", marginBottom: "0.5rem" }}>
           <div className="field" style={{ flex: 1, minWidth: 260 }}>
             <label style={{ display: "block", marginBottom: "0.6rem" }}>
@@ -509,6 +547,11 @@ export default function AdminProjectForm() {
                 🎬 Videography
               </button>
             </div>
+            <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.35rem", display: "block" }}>
+              {isVideo
+                ? "Videography projects stream video and feature production stills."
+                : "Photography projects feature high-resolution gallery frames."}
+            </span>
           </div>
 
           <div className="field" style={{ flex: 1, minWidth: 260 }}>
@@ -537,15 +580,15 @@ export default function AdminProjectForm() {
             </div>
             <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.35rem", display: "block" }}>
               {form.status === "draft"
-                ? "Draft projects remain private and hidden from the public website."
-                : `Published projects are immediately visible across the website.`}
+                ? "Draft projects remain private and hidden from public filters and search."
+                : "Published projects immediately appear in public filters and galleries."}
             </span>
           </div>
         </div>
 
         {/* Title and Slug */}
         <div className="form-row">
-          <div className="field">
+          <div className="field" style={{ flex: 2 }}>
             <label htmlFor="project-title">
               Project Title <span className="req">*</span>
             </label>
@@ -553,283 +596,454 @@ export default function AdminProjectForm() {
               id="project-title"
               value={form.title}
               onChange={(e) => onTitle(e.target.value)}
-              placeholder="e.g. Quiet Light Wedding"
+              placeholder={isVideo ? "e.g. Western Ghats Monsoon" : "e.g. Wedding Photography"}
             />
             {errors.title && <div className="error">{errors.title}</div>}
           </div>
 
-          <div className="field">
-            <label htmlFor="project-slug">
-              Slug (URL path) <span className="req">*</span>
-            </label>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="project-slug">URL Slug</label>
             <input
               id="project-slug"
               value={form.slug}
               onChange={(e) => set("slug", projectService.slugify(e.target.value))}
-              placeholder="quiet-light-wedding"
+              placeholder="e.g. western-ghats-monsoon"
             />
+            <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.2rem", display: "block" }}>
+              Public link: /portfolio/{form.slug || "..."}
+            </span>
           </div>
         </div>
 
-        {/* Tagline and Location */}
-        <div className="form-row">
-          <div className="field">
-            <label htmlFor="project-short">
-              Short Editorial Tagline <span className="req">*</span>
+        {/* Category / Discipline Selector */}
+        <div className="field">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+            <label htmlFor="project-category" style={{ margin: 0 }}>
+              Discipline / Category <span className="req">*</span>
             </label>
-            <input
-              id="project-short"
-              value={form.short}
-              onChange={(e) => set("short", e.target.value)}
-              placeholder="One compelling sentence summarizing the concept"
-            />
-            {errors.short && <div className="error">{errors.short}</div>}
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setShowAddDiscipline(!showAddDiscipline)}
+              style={{
+                fontSize: "0.72rem",
+                padding: "0.25rem 0.6rem",
+                borderColor: "rgba(168, 230, 207, 0.4)",
+                color: "#a8e6cf",
+              }}
+            >
+              {showAddDiscipline ? "✕ Close" : "➕ Add New Discipline"}
+            </button>
           </div>
 
+          <select
+            id="project-category"
+            value={form.category}
+            onChange={(e) => set("category", e.target.value)}
+          >
+            {availableDisciplines.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          {/* Inline Add Discipline Panel */}
+          {showAddDiscipline && (
+            <div
+              style={{
+                marginTop: "0.6rem",
+                padding: "0.9rem",
+                background: "rgba(0, 70, 67, 0.15)",
+                border: "1px dashed rgba(168, 230, 207, 0.4)",
+                borderRadius: 4,
+              }}
+            >
+              <label style={{ fontSize: "0.75rem", color: "#a8e6cf", display: "block", marginBottom: "0.4rem" }}>
+                Create New {isVideo ? "Videography" : "Photography"} Discipline in MongoDB:
+              </label>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <input
+                  type="text"
+                  placeholder={isVideo ? "e.g. Documentary Films" : "e.g. Architecture Photography"}
+                  value={newDisciplineName}
+                  onChange={(e) => setNewDisciplineName(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sand"
+                  onClick={handleAddNewDiscipline}
+                  disabled={addingDiscipline}
+                  style={{ padding: "0.5rem 1rem", fontSize: "0.78rem", whiteSpace: "nowrap" }}
+                >
+                  {addingDiscipline ? "Saving..." : "Save Discipline"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Short Tagline / Summary */}
+        <div className="field">
+          <label htmlFor="project-short">
+            Tagline / Short Summary <span className="req">*</span>
+          </label>
+          <input
+            id="project-short"
+            value={form.short}
+            onChange={(e) => set("short", e.target.value)}
+            placeholder={
+              isVideo
+                ? "e.g. A visual study of monsoon mist, canopy, and rain shadows across Kerala."
+                : "e.g. Wedding frames that stay with the glance, not the checklist."
+            }
+          />
+          {errors.short && <div className="error">{errors.short}</div>}
+        </div>
+
+        {/* Full Story Description */}
+        <div className="field">
+          <label htmlFor="project-description">
+            Project Description &amp; Creative Notes
+          </label>
+          <textarea
+            id="project-description"
+            rows={4}
+            value={form.description}
+            onChange={(e) => set("description", e.target.value)}
+            placeholder="Detailed creative story, technical notes, equipment, or lighting approach..."
+          />
+        </div>
+
+        {/* Shoot Location & Date */}
+        <div className="form-row">
           <div className="field">
-            <label htmlFor="project-location">Location / Region</label>
+            <label htmlFor="project-location">Primary Project Location</label>
             <input
               id="project-location"
               value={form.location}
               onChange={(e) => set("location", e.target.value)}
-              placeholder="e.g. Thrissur, Kerala"
+              placeholder="e.g. Kochi, Kerala or Western Ghats"
             />
+            <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.2rem", display: "block" }}>
+              Default location for this project. Individual frames below can specify their own specific locations.
+            </span>
           </div>
-        </div>
 
-        {/* Shoot Date and Description */}
-        <div className="form-row">
           <div className="field">
-            <label htmlFor="project-date">Shoot / Production Date</label>
+            <label htmlFor="project-date">Shoot Date / Release Timeline</label>
             <input
               id="project-date"
               type="date"
-              value={form.shootDate || ""}
+              value={form.shootDate ? form.shootDate.slice(0, 10) : ""}
               onChange={(e) => set("shootDate", e.target.value)}
             />
           </div>
         </div>
 
-        <div className="field">
-          <label htmlFor="project-description">Full Narrative / Description</label>
-          <textarea
-            id="project-description"
-            value={form.description}
-            onChange={(e) => set("description", e.target.value)}
-            rows={4}
-            placeholder="Detailed story about lighting, concept, creative direction, and gear..."
-          />
+        {/* Featured Toggle */}
+        <div style={{ margin: "0.5rem 0 1rem" }}>
+          <label style={{ display: "flex", gap: "0.6rem", alignItems: "center", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={form.featured}
+              onChange={(e) => set("featured", e.target.checked)}
+            />
+            <span style={{ fontSize: "0.88rem" }}>
+              Feature this project on the Home page highlight reel ({isVideo ? "Featured Film" : "Featured Photography"})
+            </span>
+          </label>
         </div>
 
-        {/* SECTION 2: DYNAMIC DISCIPLINE MANAGEMENT */}
-        <p className="kicker" style={{ marginTop: "1.4rem" }}>2 — Discipline / Category</p>
+        {/* ========================================================
+            SECTION 2: MEDIA BY TYPE (PHOTOGRAPHY vs VIDEOGRAPHY)
+        ========================================================= */}
+        {!isVideo ? (
+          /* ========================================================
+             PHOTOGRAPHY MEDIA (All video fields completely hidden)
+          ========================================================= */
+          <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--dark-border)", paddingTop: "1.2rem" }}>
+            <p className="kicker">2 — Photography Media</p>
+            <span style={{ fontSize: "0.78rem", color: "var(--muted)", display: "block", marginBottom: "1.2rem" }}>
+              Upload the series cover photograph and gallery frames. All video fields are hidden because this is a photography project.
+            </span>
 
-        <div className="field">
-          <label htmlFor="project-discipline">
-            {isVideo ? "Videography Discipline" : "Photography Discipline"} <span className="req">*</span>
-          </label>
-
-          <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap" }}>
-            <select
-              id="project-discipline"
-              value={showAddDiscipline ? "__add_new__" : form.category}
-              onChange={(e) => {
-                if (e.target.value === "__add_new__") {
-                  setShowAddDiscipline(true);
-                } else {
-                  setShowAddDiscipline(false);
-                  set("category", e.target.value);
-                }
-              }}
-              style={{ flex: 1, minWidth: 260 }}
-            >
-              {availableDisciplines.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-              <option value="__add_new__">+ Add New Discipline…</option>
-            </select>
-
-            {!showAddDiscipline && (
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setShowAddDiscipline(true)}
+            {/* 1. Cover Photograph */}
+            <div className="field" style={{ marginBottom: "1.6rem" }}>
+              <label>
+                Cover Photograph <span className="req">*</span>
+              </label>
+              <div
                 style={{
-                  borderColor: "var(--sand)",
-                  color: "var(--sand)",
-                  padding: "0.55rem 0.9rem",
-                  fontSize: "0.78rem",
-                  whiteSpace: "nowrap",
+                  display: "grid",
+                  gridTemplateColumns: "140px 1fr",
+                  gap: "1.2rem",
+                  alignItems: "center",
+                  background: "rgba(0,0,0,0.2)",
+                  padding: "1rem",
+                  borderRadius: 4,
+                  border: "1px solid var(--dark-border)",
                 }}
               >
-                + Add Discipline
-              </button>
-            )}
-          </div>
-
-          {/* Inline Add New Discipline Input Form */}
-          {showAddDiscipline && (
-            <div
-              style={{
-                marginTop: "0.8rem",
-                padding: "1rem",
-                background: "rgba(0, 0, 0, 0.35)",
-                border: "1px dashed var(--dark-border)",
-                borderRadius: "4px",
-              }}
-            >
-              <label style={{ fontSize: "0.78rem", color: "var(--sand)", display: "block", marginBottom: "0.4rem" }}>
-                Enter New {isVideo ? "Videography" : "Photography"} Discipline Name:
-              </label>
-              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-                <input
-                  type="text"
-                  placeholder="e.g. Architecture Photography or Documentary Films"
-                  value={newDisciplineName}
-                  onChange={(e) => setNewDisciplineName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddNewDiscipline(e);
-                    }
-                  }}
-                  style={{ flex: 1, minWidth: 240 }}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  className="btn btn-sand"
-                  disabled={addingDiscipline}
-                  onClick={handleAddNewDiscipline}
-                  style={{ padding: "0.5rem 1rem", fontSize: "0.78rem" }}
-                >
-                  {addingDiscipline ? "Saving…" : "Save Discipline"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => {
-                    setShowAddDiscipline(false);
-                    setNewDisciplineName("");
-                  }}
-                  style={{ borderColor: "var(--dark-border)", color: "var(--stone)", padding: "0.5rem 0.9rem", fontSize: "0.78rem" }}
-                >
-                  Cancel
-                </button>
-              </div>
-              <span style={{ fontSize: "0.7rem", color: "var(--muted)", marginTop: "0.35rem", display: "block" }}>
-                This new discipline will be saved to MongoDB Atlas and remain permanently available in future dropdowns.
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* SECTION 3: COVER / THUMBNAIL (DYNAMIC BY TYPE) */}
-        <p className="kicker" style={{ marginTop: "1.4rem" }}>
-          3 — {isVideo ? "Video Thumbnail / Poster Image" : "Project Cover Image"}
-        </p>
-
-        <div className="field">
-          <label>
-            {isVideo ? "Video Thumbnail / Poster" : "Cover Photograph"}{" "}
-            <span className="req">*</span>
-          </label>
-          <span style={{ fontSize: "0.75rem", color: "var(--muted)", display: "block", marginBottom: "0.6rem" }}>
-            {isVideo
-              ? "Primary visual displayed on video cards, the homepage, and before video playback begins."
-              : "Primary visual displayed on the portfolio grid, homepage spots, and project header."}
-          </span>
-
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(200px, 280px) 1fr", gap: "1.2rem", alignItems: "start" }}>
-            <div
-              style={{
-                borderRadius: "4px",
-                overflow: "hidden",
-                border: "1px solid var(--dark-border)",
-                background: "var(--dark-red)",
-                aspectRatio: isVideo ? "16 / 9" : "4 / 3",
-                position: "relative",
-              }}
-            >
-              {form.cover || form.thumbnail ? (
-                <img
-                  src={form.cover || form.thumbnail}
-                  alt="Cover preview"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                />
-              ) : (
-                <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--muted)", fontSize: "0.75rem", padding: "1rem", textAlign: "center" }}>
-                  {isVideo ? "No Video Thumbnail" : "No Cover Image Selected"}
-                </div>
-              )}
-              {isVideo && (form.cover || form.thumbnail) && (
-                <span
+                <div
                   style={{
-                    position: "absolute",
-                    bottom: 8,
-                    left: 8,
-                    background: "rgba(0, 0, 0, 0.75)",
-                    color: "var(--stone)",
-                    fontSize: "0.65rem",
-                    padding: "2px 6px",
-                    borderRadius: 2,
-                    letterSpacing: "0.08em",
+                    width: 140,
+                    aspectRatio: "4 / 3",
+                    background: "#0c0203",
+                    borderRadius: 4,
+                    overflow: "hidden",
+                    border: "1px solid var(--dark-border)",
+                    display: "grid",
+                    placeItems: "center",
                   }}
                 >
-                  VIDEO POSTER
-                </span>
-              )}
+                  {form.cover ? (
+                    <img src={form.cover} alt="Cover Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>No cover yet</span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                  <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <label
+                      htmlFor="cover-file-input"
+                      className="btn btn-outline"
+                      style={{
+                        borderColor: "var(--sand)",
+                        color: "var(--sand)",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.5rem 0.9rem",
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      📁 {uploadingCover ? "Uploading to Cloudinary..." : "Upload cover photograph"}
+                    </label>
+                    <input
+                      id="cover-file-input"
+                      ref={coverFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={onCoverFile}
+                      disabled={uploadingCover}
+                      style={{ display: "none" }}
+                    />
+                    <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
+                      Recommended: high-resolution landscape (16:9 or 3:2).
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <input
+                      type="url"
+                      placeholder="Or paste cover image URL"
+                      value={coverUrlInput}
+                      onChange={(e) => setCoverUrlInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          applyCoverUrl();
+                        }
+                      }}
+                      style={{ fontSize: "0.82rem" }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={applyCoverUrl}
+                      style={{ borderColor: "var(--sand)", color: "var(--sand)", whiteSpace: "nowrap", padding: "0.45rem 0.8rem" }}
+                    >
+                      Apply URL
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {errors.cover && <div className="error" style={{ marginTop: "0.4rem" }}>{errors.cover}</div>}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-              <div className="field">
-                <label>Upload from Device {uploadingCover ? "(Uploading to Cloudinary…)" : ""}</label>
+            {/* 2. Gallery Photographs with Per-Photo Location & Caption */}
+            <div className="field">
+              <label>
+                Gallery Photographs ({form.gallery?.length || 0} frames)
+              </label>
+              <span style={{ fontSize: "0.75rem", color: "var(--muted)", display: "block", marginBottom: "0.8rem" }}>
+                Each photograph has its own independent location and caption. Editing one photo will never affect other photos.
+              </span>
+
+              {/* Upload & URL Buttons */}
+              <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center", marginBottom: "1rem" }}>
+                <label
+                  htmlFor="gallery-file-input"
+                  className="btn btn-outline"
+                  style={{
+                    borderColor: "var(--sand)",
+                    color: "var(--sand)",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.55rem 1rem",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  📁 {uploadingGallery ? "Uploading frames to Cloudinary..." : "Upload photographs (batch)"}
+                </label>
                 <input
-                  ref={coverFileInputRef}
+                  id="gallery-file-input"
+                  ref={galleryFileInputRef}
                   type="file"
                   accept="image/*"
-                  disabled={uploadingCover}
-                  onChange={onCoverFile}
+                  multiple
+                  disabled={uploadingGallery}
+                  onChange={onGalleryFiles}
+                  style={{ display: "none" }}
                 />
-              </div>
 
-              <div className="field">
-                <label>Or Paste Image URL</label>
-                <div style={{ display: "flex", gap: "0.6rem" }}>
+                <div style={{ display: "flex", gap: "0.4rem", flex: 1, minWidth: 260 }}>
                   <input
-                    type="url"
-                    placeholder="https://example.com/cover.jpg"
-                    value={coverUrlInput}
-                    onChange={(e) => setCoverUrlInput(e.target.value)}
+                    placeholder="Or paste photo image URL"
+                    value={galleryUrlInput}
+                    onChange={(e) => setGalleryUrlInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        applyCoverUrl();
+                        addGalleryUrl();
                       }
                     }}
+                    style={{ fontSize: "0.82rem" }}
                   />
                   <button
                     type="button"
                     className="btn btn-outline"
-                    onClick={applyCoverUrl}
-                    style={{ borderColor: "var(--sand)", color: "var(--sand)", whiteSpace: "nowrap" }}
+                    onClick={addGalleryUrl}
+                    style={{ borderColor: "var(--sand)", color: "var(--sand)", whiteSpace: "nowrap", padding: "0.45rem 0.8rem" }}
                   >
-                    Apply URL
+                    Add URL
                   </button>
                 </div>
               </div>
+
+              {/* Per-Photo Cards Grid */}
+              {form.gallery && form.gallery.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {form.gallery.map((item, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "110px 1fr",
+                        gap: "1rem",
+                        background: "rgba(0, 0, 0, 0.25)",
+                        border: "1px solid var(--dark-border)",
+                        borderRadius: 4,
+                        padding: "0.85rem",
+                        alignItems: "start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "relative",
+                          width: 110,
+                          aspectRatio: "4 / 3",
+                          borderRadius: 3,
+                          overflow: "hidden",
+                          border: "1px solid var(--dark-border)",
+                        }}
+                      >
+                        <img
+                          src={item.image}
+                          alt=""
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                        <span
+                          style={{
+                            position: "absolute",
+                            bottom: 2,
+                            left: 2,
+                            background: "rgba(0,0,0,0.75)",
+                            fontSize: "10px",
+                            padding: "1px 5px",
+                            borderRadius: 2,
+                            color: "var(--sand)",
+                          }}
+                        >
+                          #{i + 1}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                        <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <div style={{ flex: 1, minWidth: 160 }}>
+                            <label style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: "0.2rem", display: "block" }}>
+                              Location for this frame
+                            </label>
+                            <input
+                              type="text"
+                              value={item.location || ""}
+                              onChange={(e) => updateGalleryPhoto(i, "location", e.target.value)}
+                              placeholder="e.g. Kochi, Kerala"
+                              style={{ fontSize: "0.82rem", padding: "0.4rem 0.6rem" }}
+                            />
+                          </div>
+
+                          <div style={{ flex: 1.5, minWidth: 200 }}>
+                            <label style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: "0.2rem", display: "block" }}>
+                              Caption / note
+                            </label>
+                            <input
+                              type="text"
+                              value={item.caption || ""}
+                              onChange={(e) => updateGalleryPhoto(i, "caption", e.target.value)}
+                              placeholder="e.g. Sunset silhouette on the backwaters"
+                              style={{ fontSize: "0.82rem", padding: "0.4rem 0.6rem" }}
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() => removeGalleryPhoto(i)}
+                            title="Remove photo"
+                            style={{
+                              marginTop: "1.1rem",
+                              padding: "0.45rem 0.75rem",
+                              fontSize: "0.74rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                            }}
+                          >
+                            ✕ Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: "1.2rem", border: "1px dashed var(--dark-border)", textAlign: "center", borderRadius: 4 }}>
+                  <p style={{ color: "var(--muted)", fontSize: "0.82rem", margin: 0 }}>
+                    No gallery frames added yet. Click “Upload photographs” or paste a URL above.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-          {errors.cover && <div className="error" style={{ marginTop: "0.5rem" }}>{errors.cover}</div>}
-        </div>
+        ) : (
+          /* ========================================================
+             VIDEOGRAPHY MEDIA (Photo gallery completely hidden)
+          ========================================================= */
+          <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--dark-border)", paddingTop: "1.2rem" }}>
+            <p className="kicker">2 — Videography Media &amp; Film Stream</p>
+            <span style={{ fontSize: "0.78rem", color: "var(--muted)", display: "block", marginBottom: "1.2rem" }}>
+              Configure video streaming source, poster thumbnail, duration, and production stills. Photography gallery fields are hidden for videography projects.
+            </span>
 
-        {/* SECTION 4: MAIN VIDEO (SHOWN ONLY FOR VIDEOGRAPHY) */}
-        {isVideo && (
-          <>
-            <p className="kicker" style={{ marginTop: "1.4rem" }}>4 — Main Video</p>
-
+            {/* 1. Main Video Source & Stream */}
             <div
               style={{
                 background: "rgba(0, 70, 67, 0.16)",
@@ -839,6 +1053,7 @@ export default function AdminProjectForm() {
                 display: "flex",
                 flexDirection: "column",
                 gap: "1.1rem",
+                marginBottom: "1.6rem",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -884,11 +1099,11 @@ export default function AdminProjectForm() {
                 </span>
               </div>
 
-              {/* URL and Provider Inputs */}
+              {/* URL, Provider, and Duration */}
               <div className="form-row">
                 <div className="field" style={{ flex: 2 }}>
                   <label style={{ fontSize: "0.74rem", color: "var(--muted)" }}>
-                    Or paste online video URL (YouTube, Vimeo, or Cloudinary MP4)
+                    Or paste online video URL (YouTube, Vimeo, or direct MP4 stream)
                   </label>
                   <input
                     value={form.videoUrl}
@@ -963,213 +1178,276 @@ export default function AdminProjectForm() {
                 </div>
               )}
             </div>
-          </>
-        )}
 
-        {/* SECTION 5: GALLERY / STILLS (DYNAMIC BY TYPE) */}
-        <p className="kicker" style={{ marginTop: "1.4rem" }}>
-          5 — {isVideo ? "Video Stills & Behind the Scenes" : "Gallery Photographs"}
-        </p>
-
-        {isVideo ? (
-          /* VIDEOGRAPHY STILLS SECTION */
-          <div className="field">
-            <label>
-              Video Stills &amp; Production Captures ({form.videoStills?.length || 0} stills)
-            </label>
-            <span style={{ fontSize: "0.75rem", color: "var(--muted)", display: "block", marginBottom: "0.6rem" }}>
-              Upload production frames and behind-the-scenes photographs for this film. Displayed on the project details page.
-            </span>
-
-            <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.8rem" }}>
-              <input
-                ref={stillsFileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={uploadingStills}
-                onChange={onVideoStillsFiles}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <input
-                placeholder="Or paste image URL to add to video stills"
-                value={stillsUrlInput}
-                onChange={(e) => setStillsUrlInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addStillsUrl();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={addStillsUrl}
+            {/* 2. Video Poster / Thumbnail */}
+            <div className="field" style={{ marginBottom: "1.6rem" }}>
+              <label>
+                Video Poster / Thumbnail Image <span className="req">*</span>
+              </label>
+              <div
                 style={{
-                  borderColor: "var(--sand)",
-                  color: "var(--sand)",
-                  padding: "0.55rem 0.9rem",
-                  whiteSpace: "nowrap",
+                  display: "grid",
+                  gridTemplateColumns: "140px 1fr",
+                  gap: "1.2rem",
+                  alignItems: "center",
+                  background: "rgba(0,0,0,0.2)",
+                  padding: "1rem",
+                  borderRadius: 4,
+                  border: "1px solid var(--dark-border)",
                 }}
               >
-                Add URL
-              </button>
-            </div>
+                <div
+                  style={{
+                    width: 140,
+                    aspectRatio: "16 / 9",
+                    background: "#0c0203",
+                    borderRadius: 4,
+                    overflow: "hidden",
+                    border: "1px solid var(--dark-border)",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  {form.cover || form.thumbnail ? (
+                    <img src={form.cover || form.thumbnail} alt="Poster Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>No poster yet</span>
+                  )}
+                </div>
 
-            {/* Video Stills Thumbnails */}
-            {form.videoStills && form.videoStills.length > 0 && (
-              <div className="thumbs" style={{ marginTop: "0.8rem", display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-                {form.videoStills.map((src, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      position: "relative",
-                      width: 90,
-                      height: 65,
-                      borderRadius: 3,
-                      overflow: "hidden",
-                      border: "1px solid var(--dark-border)",
-                    }}
-                  >
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    <button
-                      type="button"
-                      onClick={() => removeVideoStill(i)}
-                      title="Remove still"
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                  <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <label
+                      htmlFor="cover-file-input"
+                      className="btn btn-outline"
                       style={{
-                        position: "absolute",
-                        top: 2,
-                        right: 2,
-                        background: "rgba(0,0,0,0.8)",
-                        color: "#ff8b8b",
-                        border: 0,
-                        borderRadius: "50%",
-                        width: 18,
-                        height: 18,
-                        fontSize: "11px",
+                        borderColor: "var(--sand)",
+                        color: "var(--sand)",
                         cursor: "pointer",
-                        display: "grid",
-                        placeItems: "center",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.5rem 0.9rem",
+                        fontSize: "0.78rem",
                       }}
                     >
-                      ✕
-                    </button>
+                      📁 {uploadingCover ? "Uploading to Cloudinary..." : "Upload poster image"}
+                    </label>
+                    <input
+                      id="cover-file-input"
+                      ref={coverFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={onCoverFile}
+                      disabled={uploadingCover}
+                      style={{ display: "none" }}
+                    />
+                    <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
+                      Shown on video player and project cards before video starts.
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          /* PHOTOGRAPHY GALLERY SECTION */
-          <div className="field">
-            <label>
-              Gallery Photographs ({form.gallery?.length || 0} frames)
-            </label>
-            <span style={{ fontSize: "0.75rem", color: "var(--muted)", display: "block", marginBottom: "0.6rem" }}>
-              Upload high-resolution photography frames for this series. Displayed in the portfolio gallery and lightbox.
-            </span>
 
-            <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.8rem" }}>
-              <input
-                ref={galleryFileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={uploadingGallery}
-                onChange={onGalleryFiles}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <input
-                placeholder="Or paste photo image URL to add to gallery"
-                value={galleryUrlInput}
-                onChange={(e) => setGalleryUrlInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addGalleryUrl();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={addGalleryUrl}
-                style={{
-                  borderColor: "var(--sand)",
-                  color: "var(--sand)",
-                  padding: "0.55rem 0.9rem",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Add URL
-              </button>
-            </div>
-
-            {/* Gallery Thumbnails */}
-            {form.gallery && form.gallery.length > 0 && (
-              <div className="thumbs" style={{ marginTop: "0.8rem", display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-                {form.gallery.map((src, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      position: "relative",
-                      width: 90,
-                      height: 65,
-                      borderRadius: 3,
-                      overflow: "hidden",
-                      border: "1px solid var(--dark-border)",
-                    }}
-                  >
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <input
+                      type="url"
+                      placeholder="Or paste poster image URL"
+                      value={coverUrlInput}
+                      onChange={(e) => setCoverUrlInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          applyCoverUrl();
+                        }
+                      }}
+                      style={{ fontSize: "0.82rem" }}
+                    />
                     <button
                       type="button"
-                      onClick={() => removeGalleryPhoto(i)}
-                      title="Remove from gallery"
-                      style={{
-                        position: "absolute",
-                        top: 2,
-                        right: 2,
-                        background: "rgba(0,0,0,0.8)",
-                        color: "#ff8b8b",
-                        border: 0,
-                        borderRadius: "50%",
-                        width: 18,
-                        height: 18,
-                        fontSize: "11px",
-                        cursor: "pointer",
-                        display: "grid",
-                        placeItems: "center",
-                      }}
+                      className="btn btn-outline"
+                      onClick={applyCoverUrl}
+                      style={{ borderColor: "var(--sand)", color: "var(--sand)", whiteSpace: "nowrap", padding: "0.45rem 0.8rem" }}
                     >
-                      ✕
+                      Apply URL
                     </button>
                   </div>
-                ))}
+                </div>
               </div>
-            )}
+              {errors.cover && <div className="error" style={{ marginTop: "0.4rem" }}>{errors.cover}</div>}
+            </div>
+
+            {/* 3. Video Stills & Behind the Scenes */}
+            <div className="field">
+              <label>
+                Video Stills &amp; Behind the Scenes ({form.videoStills?.length || 0} stills)
+              </label>
+              <span style={{ fontSize: "0.75rem", color: "var(--muted)", display: "block", marginBottom: "0.8rem" }}>
+                Production frames and behind-the-scenes photographs for this film. Each still has its own independent location and caption.
+              </span>
+
+              {/* Upload & URL Controls */}
+              <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center", marginBottom: "1rem" }}>
+                <label
+                  htmlFor="stills-file-input"
+                  className="btn btn-outline"
+                  style={{
+                    borderColor: "var(--sand)",
+                    color: "var(--sand)",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.55rem 1rem",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  📁 {uploadingStills ? "Uploading stills to Cloudinary..." : "Upload stills (batch)"}
+                </label>
+                <input
+                  id="stills-file-input"
+                  ref={stillsFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={uploadingStills}
+                  onChange={onVideoStillsFiles}
+                  style={{ display: "none" }}
+                />
+
+                <div style={{ display: "flex", gap: "0.4rem", flex: 1, minWidth: 260 }}>
+                  <input
+                    placeholder="Or paste video still URL"
+                    value={stillsUrlInput}
+                    onChange={(e) => setStillsUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addStillsUrl();
+                      }
+                    }}
+                    style={{ fontSize: "0.82rem" }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={addStillsUrl}
+                    style={{ borderColor: "var(--sand)", color: "var(--sand)", whiteSpace: "nowrap", padding: "0.45rem 0.8rem" }}
+                  >
+                    Add URL
+                  </button>
+                </div>
+              </div>
+
+              {/* Per-Still Cards */}
+              {form.videoStills && form.videoStills.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {form.videoStills.map((item, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "110px 1fr",
+                        gap: "1rem",
+                        background: "rgba(0, 0, 0, 0.25)",
+                        border: "1px solid var(--dark-border)",
+                        borderRadius: 4,
+                        padding: "0.85rem",
+                        alignItems: "start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "relative",
+                          width: 110,
+                          aspectRatio: "16 / 9",
+                          borderRadius: 3,
+                          overflow: "hidden",
+                          border: "1px solid var(--dark-border)",
+                        }}
+                      >
+                        <img
+                          src={item.image}
+                          alt=""
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                        <span
+                          style={{
+                            position: "absolute",
+                            bottom: 2,
+                            left: 2,
+                            background: "rgba(0,0,0,0.75)",
+                            fontSize: "10px",
+                            padding: "1px 5px",
+                            borderRadius: 2,
+                            color: "var(--sand)",
+                          }}
+                        >
+                          #{i + 1}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                        <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <div style={{ flex: 1, minWidth: 160 }}>
+                            <label style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: "0.2rem", display: "block" }}>
+                              Location for this still
+                            </label>
+                            <input
+                              type="text"
+                              value={item.location || ""}
+                              onChange={(e) => updateVideoStill(i, "location", e.target.value)}
+                              placeholder="e.g. Western Ghats, Kerala"
+                              style={{ fontSize: "0.82rem", padding: "0.4rem 0.6rem" }}
+                            />
+                          </div>
+
+                          <div style={{ flex: 1.5, minWidth: 200 }}>
+                            <label style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: "0.2rem", display: "block" }}>
+                              Caption / note
+                            </label>
+                            <input
+                              type="text"
+                              value={item.caption || ""}
+                              onChange={(e) => updateVideoStill(i, "caption", e.target.value)}
+                              placeholder="e.g. Behind the scenes gimbal setup"
+                              style={{ fontSize: "0.82rem", padding: "0.4rem 0.6rem" }}
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() => removeVideoStill(i)}
+                            title="Remove still"
+                            style={{
+                              marginTop: "1.1rem",
+                              padding: "0.45rem 0.75rem",
+                              fontSize: "0.74rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                            }}
+                          >
+                            ✕ Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: "1.2rem", border: "1px dashed var(--dark-border)", textAlign: "center", borderRadius: 4 }}>
+                  <p style={{ color: "var(--muted)", fontSize: "0.82rem", margin: 0 }}>
+                    No video stills added yet. Click “Upload stills” or paste a URL above.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* SECTION 6: FEATURED TOGGLE */}
-        <div style={{ marginTop: "1rem" }}>
-          <label style={{ display: "flex", gap: "0.6rem", alignItems: "center", cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={form.featured}
-              onChange={(e) => set("featured", e.target.checked)}
-            />
-            <span>
-              Feature on the home page ({isVideo ? "Featured Videography" : "Featured Photography"})
-            </span>
-          </label>
-        </div>
-
-        {/* CLEAR ACTION BUTTONS */}
+        {/* ========================================================
+            SUBMIT / SAVE ACTIONS
+        ========================================================= */}
         <div
           style={{
             gridColumn: "1 / -1",

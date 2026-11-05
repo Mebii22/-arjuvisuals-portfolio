@@ -21,19 +21,19 @@ export default function Home() {
     projectService.list().then(setProjects).catch(() => setProjects([]));
   }, []);
 
-  // Dynamically derive category spots from published projects only
-  // Hides demo/placeholder categories that are currently in draft
+  // Dynamically derive category spots from published projects (photography and videography)
   const spots = useMemo(() => {
     const map = new Map();
     (projects || []).forEach((p) => {
       const pType = p.type || "photography";
-      if (pType !== "photography" || !p.category || p.status !== "published") return;
+      if (!p.category || p.status !== "published") return;
       if (!map.has(p.category) || p.featured) {
         map.set(p.category, {
           cat: p.category,
-          label: p.category.replace(/ Photography$/i, ""),
-          img: p.cover,
+          label: p.category.replace(/ (Photography|Videography|Videos?|Films?)$/i, ""),
+          img: p.cover || p.thumbnail || p.coverImage || "",
           slug: p.slug,
+          type: pType,
         });
       }
     });
@@ -126,7 +126,7 @@ export default function Home() {
             {spots.map((s) => (
               <Link
                 key={s.cat}
-                to={`/portfolio?cat=${encodeURIComponent(s.cat)}`}
+                to={`/portfolio?type=${encodeURIComponent(s.type || "all")}&cat=${encodeURIComponent(s.cat)}`}
                 className="spot-card"
                 data-cursor="project"
               >

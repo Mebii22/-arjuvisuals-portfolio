@@ -48,15 +48,15 @@ const projectSchema = new mongoose.Schema(
       trim: true,
     },
     images: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     gallery: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     videoStills: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     videoUrl: {
@@ -140,9 +140,15 @@ const projectSchema = new mongoose.Schema(
         ret.images = g;
         ret.videoStills = Array.isArray(ret.videoStills) && ret.videoStills.length > 0 ? ret.videoStills : g;
 
-        // Ensure category and subCategory are synced
-        ret.category = ret.category || ret.subCategory || (ret.type === "videography" ? "Cinematic Films" : "Wedding Photography");
-        ret.subCategory = ret.subCategory || ret.category;
+        // Ensure category and subCategory are synced and not generic
+        let cat = ret.category;
+        if (!cat || cat.toLowerCase() === "photography" || cat.toLowerCase() === "videography") {
+          cat = ret.subCategory && ret.subCategory.toLowerCase() !== "photography" && ret.subCategory.toLowerCase() !== "videography"
+            ? ret.subCategory
+            : (ret.type === "videography" ? "Cinematic Films" : "Wedding Photography");
+        }
+        ret.category = cat;
+        ret.subCategory = ret.subCategory && ret.subCategory.toLowerCase() !== "photography" && ret.subCategory.toLowerCase() !== "videography" ? ret.subCategory : cat;
 
         return ret;
       },
@@ -165,8 +171,14 @@ const projectSchema = new mongoose.Schema(
         ret.images = g;
         ret.videoStills = Array.isArray(ret.videoStills) && ret.videoStills.length > 0 ? ret.videoStills : g;
 
-        ret.category = ret.category || ret.subCategory || (ret.type === "videography" ? "Cinematic Films" : "Wedding Photography");
-        ret.subCategory = ret.subCategory || ret.category;
+        let objCat = ret.category;
+        if (!objCat || objCat.toLowerCase() === "photography" || objCat.toLowerCase() === "videography") {
+          objCat = ret.subCategory && ret.subCategory.toLowerCase() !== "photography" && ret.subCategory.toLowerCase() !== "videography"
+            ? ret.subCategory
+            : (ret.type === "videography" ? "Cinematic Films" : "Wedding Photography");
+        }
+        ret.category = objCat;
+        ret.subCategory = ret.subCategory && ret.subCategory.toLowerCase() !== "photography" && ret.subCategory.toLowerCase() !== "videography" ? ret.subCategory : objCat;
 
         return ret;
       },

@@ -2,15 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import Lightbox from "./Lightbox";
-import { getCategoriesForType, normCategory } from "../utils/projectFilters";
+import { normCategory } from "../utils/projectFilters";
+import { disciplineService } from "../services/disciplineService";
 
 function flatten(projects) {
-  const tiles = [];
-  projects.forEach((p) => {
+  const photoTiles = [];
+  const videoTiles = [];
+
+  // Filter only published projects for public display
+  const published = (projects || []).filter((p) => p.status === "published");
+
+  published.forEach((p) => {
     const isVideo = p.type === "videography";
     if (isVideo) {
-      tiles.push({
-        id: `video-${p.id}`,
+      videoTiles.push({
+        id: `video-${p.id || p.slug}`,
         src: p.cover || p.thumbnail || p.coverImage || "/images/projects/travel-photography/cover.jpg",
         title: p.title,
         slug: p.slug,
@@ -20,30 +26,72 @@ function flatten(projects) {
         duration: p.duration || "",
         videoUrl: p.videoUrl || "",
         featured: !!p.featured,
+        caption: p.short || "",
       });
       return;
     }
 
-    // photography project
-    const imgs = [p.cover, ...(p.gallery || [])].filter((v, i, a) => v && a.indexOf(v) === i);
-    imgs.forEach((src, i) => {
-      const loc =
-        (p.photoLocations && p.photoLocations[src]) ||
-        p.location ||
-        "";
-      tiles.push({
-        id: `${p.id}-${i}-${String(src).slice(-16)}`,
+    // Photography project: support both object { image, location, caption } and string URLs
+    const coverSrc = p.cover || p.coverImage || p.thumbnail || "";
+    const rawGallery = Array.isArray(p.gallery) ? p.gallery : [];
+
+    // Add cover frame first
+    if (coverSrc) {
+      photoTiles.push({
+        id: `${p.id || p.slug}-cover`,
+        src: coverSrc,
+        title: p.title,
+        slug: p.slug,
+        type: "photography",
+        category: p.category,
+        location: p.location || "",
+        caption: "",
+        featured: !!p.featured,
+      });
+    }
+
+    // Add gallery frames
+    rawGallery.forEach((item, i) => {
+      const src = typeof item === "string" ? item : (item && (item.image || item.src || ""));
+      if (!src || src === coverSrc) return;
+      const loc = (typeof item === "object" && item.location)
+        ? item.location
+        : ((p.photoLocations && p.photoLocations[src]) || p.location || "");
+      const cap = (typeof item === "object" && item.caption) ? item.caption : "";
+
+      photoTiles.push({
+        id: `${p.id || p.slug}-${i}-${String(src).slice(-16)}`,
         src,
         title: p.title,
         slug: p.slug,
         type: "photography",
         category: p.category,
         location: loc,
-        featured: p.featured && i === 0,
+        caption: cap,
+        featured: false,
       });
     });
   });
-  return tiles;
+
+  // Balanced interleaved result for "All Works" view
+  // Mix in video cards rhythmically across the photo gallery so videos are never hidden at the very end
+  const combined = [];
+  let vIndex = 0;
+  for (let i = 0; i < photoTiles.length; i++) {
+    combined.push(photoTiles[i]);
+    // Insert a video project every 3 photo tiles as long as videos remain
+    if ((i + 1) % 3 === 0 && vIndex < videoTiles.length) {
+      combined.push(videoTiles[vIndex]);
+      vIndex++;
+    }
+  }
+  // Append any remaining video tiles
+  while (vIndex < videoTiles.length) {
+    combined.push(videoTiles[vIndex]);
+    vIndex++;
+  }
+
+  return combined;
 }
 
 export default function InteractiveGallery({
@@ -58,6 +106,11 @@ export default function InteractiveGallery({
   const [type, setType] = useState(initialType || "all");
   const [filter, setFilter] = useState(initialFilter || "All");
   const [lb, setLb] = useState(null);
+  const [disciplines, setDisciplines] = useState([]);
+
+  useEffect(() => {
+    disciplineService.list().then(setDisciplines).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (initialType) setType(initialType);
@@ -75,8 +128,53 @@ export default function InteractiveGallery({
   };
 
   const availableCategories = useMemo(() => {
-    return getCategoriesForType(type, projects, { onlyExisting: true });
-  }, [type, projects]);
+    const presentCats = new Set();
+    const published = (projects || []).filter((p) => p.status === "published");
+
+    published.forEach((p) => {
+      const pType = p.type || "photography";
+      if (type === "all" || pType === type) {
+        if (p.category) presentCats.add(p.category);
+      }
+    });
+
+    (disciplines || []).forEach((d) => {
+      if (type === "all" || d.type === type) {
+        if (d.name) presentCats.add(d.name);
+      }
+    });
+
+    const canonical = [
+      "Wedding Photography",
+      "Portrait Photography",
+      "Nature Photography",
+      "Travel Photography",
+      "Fashion Photography",
+      "Event Photography",
+      "Product Photography",
+      "Cinematic Films",
+      "Commercial Videos",
+      "Music Videos",
+      "Wedding Films",
+      "Reels & Short Films",
+    ];
+
+    const ordered = [];
+    canonical.forEach((c) => {
+      const match = Array.from(presentCats).find((pc) => normCategory(pc) === normCategory(c));
+      if (match && !ordered.some((o) => normCategory(o) === normCategory(match))) {
+        ordered.push(match);
+      }
+    });
+
+    presentCats.forEach((pc) => {
+      if (!ordered.some((o) => normCategory(o) === normCategory(pc))) {
+        ordered.push(pc);
+      }
+    });
+
+    return ordered;
+  }, [type, projects, disciplines]);
 
   const tiles = useMemo(() => {
     let list = allTiles;
@@ -155,7 +253,7 @@ export default function InteractiveGallery({
         <div className="filters" role="tablist" aria-label="Portfolio categories">
           {["All", ...availableCategories].map((c) => {
             const isAll = c === "All";
-            const label = isAll ? "All" : c.replace(/ Photography$/i, "");
+            const label = isAll ? "All" : c.replace(/ (Photography|Videography)$/i, "");
             const isActive = isAll
               ? !filter || filter === "All"
               : (!(!filter || filter === "All") && normCategory(filter) === normCategory(c));
@@ -246,7 +344,8 @@ export default function InteractiveGallery({
             index={lb}
             title={activePhoto.title}
             caption={
-              activePhoto.category.replace(" Photography", "") +
+              (activePhoto.caption ? `${activePhoto.caption} · ` : "") +
+              (activePhoto.category.replace(" Photography", "")) +
               (activePhoto.location ? ` · ${activePhoto.location}` : "")
             }
             href={`/portfolio/${activePhoto.slug}`}

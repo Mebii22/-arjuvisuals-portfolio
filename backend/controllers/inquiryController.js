@@ -69,6 +69,55 @@ const createInquiry = async (req, res) => {
       notes: "",
     });
 
+    // Send notification email to admin via nodemailer (fail-safe)
+    try {
+      const nodemailer = require("nodemailer");
+      const host = process.env.SMTP_HOST || process.env.EMAIL_HOST;
+      const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+      const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+      const port = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
+      const adminEmail = process.env.ADMIN_EMAIL || user || "arjunmurali@arjuvisuals.co";
+
+      if (host && user && pass) {
+        const transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure: port === 465,
+          auth: { user, pass },
+        });
+
+        const mailOptions = {
+          from: `"ArjuVisuals Inquiry" <${user}>`,
+          to: adminEmail,
+          replyTo: email.trim(),
+          subject: `New Inquiry from ${name.trim()} [${service.trim()}]`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 6px;">
+              <h2 style="color: #004643; margin-top: 0;">New Inquiry on ArjuVisuals.co</h2>
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                <tr><td style="padding: 8px 0; font-weight: bold; width: 120px;">Client Name:</td><td>${name.trim()}</td></tr>
+                <tr><td style="padding: 8px 0; font-weight: bold;">Client Email:</td><td><a href="mailto:${email.trim()}">${email.trim()}</a></td></tr>
+                <tr><td style="padding: 8px 0; font-weight: bold;">Phone:</td><td><a href="tel:${phone.trim()}">${phone.trim() || "Not provided"}</a></td></tr>
+                <tr><td style="padding: 8px 0; font-weight: bold;">Service:</td><td>${service.trim()}</td></tr>
+                <tr><td style="padding: 8px 0; font-weight: bold;">Date / Timeline:</td><td>${eventDate.trim() || "Flexible / Not specified"}</td></tr>
+                <tr><td style="padding: 8px 0; font-weight: bold;">Location:</td><td>${location.trim() || "Not provided"}</td></tr>
+                <tr><td style="padding: 8px 0; font-weight: bold;">Budget:</td><td>${budget.trim() || "Not provided"}</td></tr>
+              </table>
+              <h3 style="color: #004643; margin-bottom: 6px;">Project Details / Message:</h3>
+              <div style="background: #f7f7f7; padding: 14px; border-left: 4px solid #004643; border-radius: 4px; white-space: pre-line;">${message.trim()}</div>
+              <p style="font-size: 12px; color: #888; margin-top: 24px;">Click Reply in your email client to email ${name.trim()} directly at ${email.trim()}.</p>
+            </div>
+          `,
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`Inquiry notification email sent to ${adminEmail}`);
+      }
+    } catch (emailErr) {
+      console.warn("Inquiry email notification skipped or encountered an error:", emailErr.message);
+      // Fail-safe: Inquiry is already successfully saved to MongoDB Atlas!
+    }
+
     res.status(201).json({
       success: true,
       message: "Inquiry submitted successfully",

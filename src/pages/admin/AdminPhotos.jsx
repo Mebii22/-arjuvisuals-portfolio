@@ -221,7 +221,18 @@ export default function AdminPhotos() {
     const nextLocations = { ...(activeProject.photoLocations || {}) };
     nextLocations[src] = trimmed;
 
-    const payload = { photoLocations: nextLocations };
+    const nextGallery = (activeProject.gallery || []).map((item) => {
+      const itemSrc = typeof item === "string" ? item : (item && (item.image || item.src));
+      if (itemSrc === src) {
+        if (typeof item === "object") {
+          return { ...item, location: trimmed };
+        }
+        return { image: item, location: trimmed, caption: "" };
+      }
+      return item;
+    });
+
+    const payload = { photoLocations: nextLocations, gallery: nextGallery };
     if (isCover && trimmed) {
       payload.location = trimmed;
     }
@@ -598,11 +609,12 @@ export default function AdminPhotos() {
 
           {activeProject.gallery && activeProject.gallery.length > 0 ? (
             <div className="photo-admin-grid">
-              {activeProject.gallery.map((src, idx) => {
+              {activeProject.gallery.map((item, idx) => {
+                const src = typeof item === "string" ? item : (item && (item.image || item.src || ""));
                 const currentLoc =
-                  (activeProject.photoLocations && activeProject.photoLocations[src]) ||
-                  activeProject.location ||
-                  "";
+                  (typeof item === "object" && item.location)
+                    ? item.location
+                    : ((activeProject.photoLocations && activeProject.photoLocations[src]) || activeProject.location || "");
                 const disciplineName = activeProject.category.replace(" Photography", "");
 
                 return (

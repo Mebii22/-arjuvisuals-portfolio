@@ -126,14 +126,35 @@ export default function ProjectDetails() {
     ? getVideoEmbedInfo(playableVideoUrl || project.videoUrl, project.videoProvider)
     : null;
 
-  // Stills / gallery images
-  const rawStills = isVideo
+  // Stills / gallery images normalized with independent location & caption metadata
+  const coverUrl = project.cover || project.thumbnail || project.coverImage || "";
+  const rawItems = isVideo
     ? (Array.isArray(project.videoStills) && project.videoStills.length > 0
         ? project.videoStills
-        : (project.gallery || []).filter((v) => v && v !== project.cover && v !== project.thumbnail))
-    : [project.cover, ...(project.gallery || [])].filter(Boolean);
+        : (project.gallery || []).filter((v) => {
+            const vSrc = typeof v === "string" ? v : (v && (v.image || v.src));
+            return vSrc && vSrc !== coverUrl;
+          }))
+    : [coverUrl, ...(Array.isArray(project.gallery) ? project.gallery : [])].filter(Boolean);
 
-  const images = rawStills.filter((v, i, a) => v && a.indexOf(v) === i);
+  const normalizedPhotos = [];
+  const seenUrls = new Set();
+  rawItems.forEach((item) => {
+    const src = typeof item === "string" ? item : (item && (item.image || item.src || item.url));
+    if (!src || seenUrls.has(src)) return;
+    seenUrls.add(src);
+    const loc = (typeof item === "object" && item.location)
+      ? item.location
+      : ((project.photoLocations && project.photoLocations[src]) || project.location || "");
+    const cap = (typeof item === "object" && item.caption) ? item.caption : "";
+    normalizedPhotos.push({
+      image: src,
+      location: loc,
+      caption: cap,
+    });
+  });
+
+  const images = normalizedPhotos.map((p) => p.image);
 
   const idx = siblings.findIndex((p) => p.slug === project.slug);
   const prev = idx > 0 ? siblings[idx - 1] : null;
@@ -437,10 +458,11 @@ export default function ProjectDetails() {
             index={lb}
             title={project.title}
             caption={
+              (normalizedPhotos[lb]?.caption ? `${normalizedPhotos[lb].caption} · ` : "") +
               (isVideo ? `Behind the scenes · ${project.category}` : project.category.replace(" Photography", "")) +
-              ((project.photoLocations && project.photoLocations[images[lb]]) || project.location
-                ? ` · ${(project.photoLocations && project.photoLocations[images[lb]]) || project.location}`
-                : "")
+              (normalizedPhotos[lb]?.location
+                ? ` · ${normalizedPhotos[lb].location}`
+                : (project.location ? ` · ${project.location}` : ""))
             }
             onClose={close}
             onPrev={() => step(-1)}
