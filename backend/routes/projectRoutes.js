@@ -34,7 +34,8 @@ router.post("/", protectAdmin, addProject);
 // ID-BASED ROUTES
 // ==========================================
 
-// Get a single project by MongoDB ID (Public)
+// Get a single project by slug or MongoDB ID (Public)
+router.get("/slug/:id", getSingleProject);
 router.get("/:id", getSingleProject);
 
 // Update an existing project (Admin only)

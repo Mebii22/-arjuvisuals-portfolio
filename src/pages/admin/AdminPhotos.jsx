@@ -303,12 +303,16 @@ export default function AdminPhotos() {
             </div>
           </div>
 
-          {/* SECTION 1: COVER PHOTO */}
+          {/* SECTION 1: COVER PHOTO / VIDEO THUMBNAIL */}
           <div className="admin-card form-grid" style={{ marginBottom: "1.8rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <p className="kicker" style={{ margin: 0 }}>Cover Photograph</p>
+              <p className="kicker" style={{ margin: 0 }}>
+                {activeProject.type === "videography" ? "Video Thumbnail / Poster Image" : "Cover Photograph"}
+              </p>
               <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-                Main image displayed on the portfolio grid and project header
+                {activeProject.type === "videography"
+                  ? "Poster image displayed on video cards, the homepage, and before video playback begins"
+                  : "Main image displayed on the portfolio grid and project header"}
               </span>
             </div>
 
@@ -319,19 +323,33 @@ export default function AdminPhotos() {
                   overflow: "hidden",
                   border: "1px solid var(--dark-border)",
                   background: "var(--dark-red)",
-                  aspectRatio: "16/10",
+                  aspectRatio: activeProject.type === "videography" ? "16/9" : "16/10",
                 }}
               >
                 <img
-                  src={activeProject.cover}
+                  src={
+                    activeProject.cover ||
+                    activeProject.thumbnail ||
+                    (activeProject.type === "videography"
+                      ? "/images/projects/travel-photography/cover.jpg"
+                      : "/images/projects/wedding-photography/cover.jpg")
+                  }
                   alt={activeProject.title}
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = activeProject.type === "videography"
+                      ? "/images/projects/travel-photography/cover.jpg"
+                      : "/images/projects/wedding-photography/cover.jpg";
+                  }}
                 />
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
                 <div className="field">
-                  <label>Cover Caption &amp; Location (Text after dot ·)</label>
+                  <label>
+                    {activeProject.type === "videography" ? "Thumbnail Caption & Location (Text after dot ·)" : "Cover Caption & Location (Text after dot ·)"}
+                  </label>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                     <span
                       style={{
@@ -369,7 +387,9 @@ export default function AdminPhotos() {
                 </div>
 
                 <div className="field">
-                  <label>Replace Cover: Upload from device {uploadingCover ? "(Processing…)" : ""}</label>
+                  <label>
+                    {activeProject.type === "videography" ? "Replace Thumbnail: Upload from device" : "Replace Cover: Upload from device"} {uploadingCover ? "(Processing…)" : ""}
+                  </label>
                   <input
                     ref={coverFileInputRef}
                     type="file"
@@ -380,7 +400,9 @@ export default function AdminPhotos() {
                 </div>
 
                 <div className="field">
-                  <label>Or paste new cover image URL</label>
+                  <label>
+                    {activeProject.type === "videography" ? "Or paste new thumbnail URL" : "Or paste new cover image URL"}
+                  </label>
                   <div style={{ display: "flex", gap: "0.6rem" }}>
                     <input
                       type="url"
@@ -394,7 +416,7 @@ export default function AdminPhotos() {
                       onClick={handleCoverUrlSubmit}
                       style={{ borderColor: "var(--sand)", color: "var(--sand)", whiteSpace: "nowrap" }}
                     >
-                      Apply Cover
+                      {activeProject.type === "videography" ? "Apply Thumbnail" : "Apply Cover"}
                     </button>
                   </div>
                 </div>
@@ -402,10 +424,10 @@ export default function AdminPhotos() {
             </div>
           </div>
 
-          {/* SECTION 2: ADD PHOTOS TO THIS PROJECT */}
+          {/* SECTION 2: ADD PHOTOS / VIDEO STILLS */}
           <form className="admin-card form-grid" onSubmit={addPhotosToGallery} style={{ marginBottom: "1.8rem" }}>
             <h2 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em", fontSize: "1.3rem", margin: 0 }}>
-              ADD PHOTOS TO {activeProject.title.toUpperCase()}
+              ADD {activeProject.type === "videography" ? "VIDEO STILLS" : "PHOTOS"} TO {activeProject.title.toUpperCase()}
             </h2>
 
             <div className="form-row">
@@ -552,7 +574,7 @@ export default function AdminPhotos() {
 
             <div style={{ display: "flex", gap: "0.8rem", alignItems: "center" }}>
               <button className="btn btn-sand" type="submit" disabled={uploading} style={{ width: "fit-content" }}>
-                Add to Project Gallery {stagedFiles.length > 0 ? `(${stagedFiles.length})` : ""}
+                Add to {activeProject.type === "videography" ? "Video Stills" : "Project Gallery"} {stagedFiles.length > 0 ? `(${stagedFiles.length})` : ""}
               </button>
               {stagedFiles.length > 0 && (
                 <button
@@ -567,10 +589,10 @@ export default function AdminPhotos() {
             </div>
           </form>
 
-          {/* SECTION 3: PROJECT GALLERY PHOTOS */}
+          {/* SECTION 3: PROJECT GALLERY PHOTOS / VIDEO STILLS */}
           <div className="admin-top" style={{ marginBottom: "1rem" }}>
             <h2 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em", fontSize: "1.4rem", margin: 0 }}>
-              GALLERY PHOTOGRAPHS ({activeProject.gallery?.length || 0})
+              {activeProject.type === "videography" ? "VIDEO STILLS & PRODUCTION FRAMES" : "GALLERY PHOTOGRAPHS"} ({activeProject.gallery?.length || 0})
             </h2>
           </div>
 
@@ -799,15 +821,21 @@ export default function AdminPhotos() {
                             border: "1px solid var(--dark-border)",
                           }}
                         >
-                          {p.cover ? (
+                          {p.cover || p.thumbnail ? (
                             <img
-                              src={p.cover}
+                              src={p.cover || p.thumbnail}
                               alt=""
                               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = isVideo
+                                  ? "/images/projects/travel-photography/cover.jpg"
+                                  : "/images/projects/wedding-photography/cover.jpg";
+                              }}
                             />
                           ) : (
                             <div style={{ display: "grid", placeItems: "center", height: "100%", fontSize: "0.6rem", color: "var(--muted)" }}>
-                              No Cover
+                              No Image
                             </div>
                           )}
                         </div>

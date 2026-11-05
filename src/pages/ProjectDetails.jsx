@@ -127,9 +127,13 @@ export default function ProjectDetails() {
     : null;
 
   // Stills / gallery images
-  const images = isVideo
-    ? (project.gallery || []).filter((v, i, a) => v && a.indexOf(v) === i)
-    : [project.cover, ...(project.gallery || [])].filter((v, i, a) => v && a.indexOf(v) === i);
+  const rawStills = isVideo
+    ? (Array.isArray(project.videoStills) && project.videoStills.length > 0
+        ? project.videoStills
+        : (project.gallery || []).filter((v) => v && v !== project.cover && v !== project.thumbnail))
+    : [project.cover, ...(project.gallery || [])].filter(Boolean);
+
+  const images = rawStills.filter((v, i, a) => v && a.indexOf(v) === i);
 
   const idx = siblings.findIndex((p) => p.slug === project.slug);
   const prev = idx > 0 ? siblings[idx - 1] : null;
@@ -210,8 +214,21 @@ export default function ProjectDetails() {
       )}
       <section className="detail-hero">
         <motion.img
-          src={project.cover}
+          src={
+            project.cover ||
+            project.thumbnail ||
+            project.coverImage ||
+            (isVideo
+              ? "/images/projects/travel-photography/cover.jpg"
+              : "/images/projects/wedding-photography/cover.jpg")
+          }
           alt={project.title}
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = isVideo
+              ? "/images/projects/travel-photography/cover.jpg"
+              : "/images/projects/wedding-photography/cover.jpg";
+          }}
           initial={{ scale: 1.12 }}
           animate={{ scale: 1 }}
           transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
@@ -276,7 +293,7 @@ export default function ProjectDetails() {
                 <video
                   controls
                   playsInline
-                  poster={project.cover}
+                  poster={project.thumbnail || project.cover || "/images/projects/travel-photography/cover.jpg"}
                   src={embedInfo.url}
                   style={{ width: "100%", height: "100%", background: "#000" }}
                 >
