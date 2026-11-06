@@ -1,40 +1,36 @@
 const mongoose = require("mongoose");
 const Inquiry = require("../models/Inquiry");
+const { BrevoClient } = require("@getbrevo/brevo");
 
 /**
- * Helper to safely send admin email notification in the background.
- * Uses strict timeouts and error boundaries so failure never affects HTTP responses or visitor UX.
+ * Helper to safely send admin email notification in the background via Brevo HTTP API.
+ * Uses Brevo HTTPS REST API (port 443) to avoid cloud SMTP connection timeouts.
+ * Employs strict error boundaries so failure never affects visitor UX or inquiry creation.
  */
 const sendInquiryNotificationEmail = async (inquiry) => {
   try {
-    const nodemailer = require("nodemailer");
-    const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-    const rawPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
-    const pass = rawPass ? rawPass.replace(/\s+/g, "").trim() : "";
-    const host = (process.env.SMTP_HOST || process.env.EMAIL_HOST || "smtp.gmail.com").trim();
-    const port = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 465);
-    const adminEmail = (process.env.ADMIN_EMAIL || user || "arjuvisuals.co@gmail.com").trim();
+    const apiKey = (process.env.BREVO_API_KEY || "").trim();
+    const senderEmail = (process.env.BREVO_SENDER_EMAIL || "").trim();
+    const senderName = (process.env.BREVO_SENDER_NAME || "ArjuVisuals Portfolio").trim();
+    const adminEmail = (process.env.ADMIN_EMAIL || senderEmail || "arjuvisuals.co@gmail.com").trim();
 
-    if (!user || !pass) {
-      console.log("[Inquiry] SMTP credentials not configured (SMTP_USER/SMTP_PASS missing). Background email notification skipped.");
+    if (!apiKey || !senderEmail) {
+      console.warn(
+        "[Inquiry] Brevo email notification skipped: BREVO_API_KEY or BREVO_SENDER_EMAIL is not configured."
+      );
       return false;
     }
 
-    const isSecure = process.env.SMTP_SECURE === "true" || port === 465;
+    const brevo = new BrevoClient({ apiKey, timeoutInSeconds: 15 });
 
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: isSecure,
-      auth: { user: user.trim(), pass },
-      connectionTimeout: 8000, // 8s connection timeout
-      greetingTimeout: 8000,   // 8s greeting timeout
-      socketTimeout: 15000,    // 15s socket timeout
-      tls: {
-        rejectUnauthorized: false,
-        servername: host,
-      },
-    });
+    const customerName = (inquiry.name || "").trim() || "Valued Client";
+    const customerEmail = (inquiry.email || "").trim();
+    const customerPhone = (inquiry.phone || "").trim() || "Not provided";
+    const serviceName = (inquiry.service || "").trim() || "General Inquiry";
+    const timeline = (inquiry.eventDate || "").trim() || "Flexible / TBC";
+    const location = (inquiry.location || "").trim() || "Not specified";
+    const budget = (inquiry.budget || "").trim() || "Not specified";
+    const messageContent = (inquiry.message || "").trim();
 
     const inquiryTimestamp = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
@@ -42,47 +38,84 @@ const sendInquiryNotificationEmail = async (inquiry) => {
       timeStyle: "medium",
     });
 
-    const mailOptions = {
-      from: `"ArjuVisuals Portfolio" <${user.trim()}>`,
-      to: adminEmail,
-      replyTo: inquiry.email ? inquiry.email.trim() : user.trim(),
-      subject: `New Inquiry from ${inquiry.name.trim()} — ArjuVisuals.co`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; color: #1a202c; background-color: #ffffff;">
-          <div style="border-bottom: 2px solid #004643; padding-bottom: 14px; margin-bottom: 20px;">
-            <h2 style="color: #004643; margin: 0; font-size: 20px; letter-spacing: -0.02em;">New Inquiry Received — ArjuVisuals.co</h2>
-            <p style="color: #718096; margin: 6px 0 0; font-size: 13px;">Date &amp; Time: ${inquiryTimestamp}</p>
-          </div>
+    const subject = `New Inquiry from ${customerName} — ArjuVisuals.co`;
 
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; width: 140px; color: #4a5568;">Customer Name:</td><td style="padding: 10px 0; color: #1a202c; font-weight: 600;">${inquiry.name.trim()}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Customer Email:</td><td style="padding: 10px 0;"><a href="mailto:${inquiry.email.trim()}" style="color: #004643; font-weight: 500; text-decoration: underline;">${inquiry.email.trim()}</a></td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Customer Phone:</td><td style="padding: 10px 0;"><a href="tel:${(inquiry.phone || "").trim()}" style="color: #004643;">${(inquiry.phone || "").trim() || "Not provided"}</a></td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Requested Service:</td><td style="padding: 10px 0; font-weight: 600; color: #004643;">${inquiry.service.trim()}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Date / Timeline:</td><td style="padding: 10px 0; color: #1a202c;">${(inquiry.eventDate || "").trim() || "Flexible / TBC"}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Location:</td><td style="padding: 10px 0; color: #1a202c;">${(inquiry.location || "").trim() || "Not specified"}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Estimated Budget:</td><td style="padding: 10px 0; color: #1a202c;">${(inquiry.budget || "").trim() || "Not specified"}</td></tr>
-          </table>
+    const textContent = `
+New Inquiry Received — ArjuVisuals.co
+Date & Time: ${inquiryTimestamp}
 
-          <div style="margin-top: 16px;">
-            <h3 style="color: #004643; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px;">Customer Message:</h3>
-            <div style="background: #f7fafc; padding: 16px; border-left: 4px solid #004643; border-radius: 4px; white-space: pre-line; font-size: 14px; line-height: 1.6; color: #2d3748;">
-              ${inquiry.message.trim()}
-            </div>
-          </div>
+Customer Name: ${customerName}
+Customer Email: ${customerEmail}
+Customer Phone: ${customerPhone}
+Requested Service: ${serviceName}
+Date / Timeline: ${timeline}
+Location: ${location}
+Estimated Budget: ${budget}
 
-          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096;">
-            💡 <em>Click <strong>Reply</strong> in your mail client to reply directly to <strong>${inquiry.name.trim()}</strong> at <strong>${inquiry.email.trim()}</strong>.</em>
+Customer Message:
+${messageContent}
+
+---
+Reply directly to this email to reply to ${customerName} (${customerEmail}).
+`.trim();
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; color: #1a202c; background-color: #ffffff;">
+        <div style="border-bottom: 2px solid #004643; padding-bottom: 14px; margin-bottom: 20px;">
+          <h2 style="color: #004643; margin: 0; font-size: 20px; letter-spacing: -0.02em;">New Inquiry Received — ArjuVisuals.co</h2>
+          <p style="color: #718096; margin: 6px 0 0; font-size: 13px;">Date &amp; Time: ${inquiryTimestamp}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+          <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; width: 140px; color: #4a5568;">Customer Name:</td><td style="padding: 10px 0; color: #1a202c; font-weight: 600;">${customerName}</td></tr>
+          <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Customer Email:</td><td style="padding: 10px 0;"><a href="mailto:${customerEmail}" style="color: #004643; font-weight: 500; text-decoration: underline;">${customerEmail}</a></td></tr>
+          <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Customer Phone:</td><td style="padding: 10px 0;"><a href="tel:${customerPhone}" style="color: #004643;">${customerPhone}</a></td></tr>
+          <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Requested Service:</td><td style="padding: 10px 0; font-weight: 600; color: #004643;">${serviceName}</td></tr>
+          <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Date / Timeline:</td><td style="padding: 10px 0; color: #1a202c;">${timeline}</td></tr>
+          <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Location:</td><td style="padding: 10px 0; color: #1a202c;">${location}</td></tr>
+          <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: 600; color: #4a5568;">Estimated Budget:</td><td style="padding: 10px 0; color: #1a202c;">${budget}</td></tr>
+        </table>
+
+        <div style="margin-top: 16px;">
+          <h3 style="color: #004643; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px;">Customer Message:</h3>
+          <div style="background: #f7fafc; padding: 16px; border-left: 4px solid #004643; border-radius: 4px; white-space: pre-line; font-size: 14px; line-height: 1.6; color: #2d3748;">
+            ${messageContent}
           </div>
         </div>
-      `,
+
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096;">
+          💡 <em>Click <strong>Reply</strong> in your mail client to reply directly to <strong>${customerName}</strong> at <strong>${customerEmail}</strong>.</em>
+        </div>
+      </div>
+    `;
+
+    const sendPayload = {
+      subject,
+      sender: {
+        name: senderName,
+        email: senderEmail,
+      },
+      to: [
+        {
+          email: adminEmail,
+          name: "Arjun Murali",
+        },
+      ],
+      replyTo: {
+        email: customerEmail || senderEmail,
+        name: customerName,
+      },
+      textContent,
+      htmlContent,
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log(`[Inquiry] Notification email sent successfully to ${adminEmail}`);
+    const response = await brevo.transactionalEmails.sendTransacEmail(sendPayload);
+    const messageId = response?.messageId || "sent";
+    console.log(`[Inquiry] Notification email sent successfully via Brevo to ${adminEmail} (messageId: ${messageId})`);
     return true;
   } catch (err) {
-    console.warn(`[Inquiry] Background email notification failed: ${err.message}`);
+    const errorDetails = err?.response?.body?.message || err?.body?.message || err?.message || String(err);
+    console.warn(`[Inquiry] Background email notification failed via Brevo: ${errorDetails}`);
     return false;
   }
 };
