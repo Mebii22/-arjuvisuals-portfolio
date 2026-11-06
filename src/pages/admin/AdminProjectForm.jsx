@@ -8,8 +8,13 @@ import { getVideoEmbedInfo } from "../../utils/projectFilters";
 import { saveDeviceVideoFile, resolveVideoUrl, formatBytes } from "../../utils/videoStorage";
 import { useToast } from "../../context/ToastContext";
 import { compressImageFile } from "../../utils/imageUtils";
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
+import {
+  MAX_IMAGE_SIZE_BYTES,
+  MAX_VIDEO_SIZE_BYTES,
+  validateMediaFile,
+  uploadDirectToCloudinary,
+  formatFileSizeMB,
+} from "../../services/cloudinaryDirectUpload";
 
 const normalizeMediaItem = (item, defaultLoc = "") => {
   if (!item) return null;
@@ -67,7 +72,13 @@ export default function AdminProjectForm() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [uploadingStills, setUploadingStills] = useState(false);
+
+  // Video Direct Cloudinary Upload States (0-100% progress tracking)
   const [videoUploading, setVideoUploading] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [videoUploadSuccess, setVideoUploadSuccess] = useState(false);
+  const [videoUploadError, setVideoUploadError] = useState(null);
+  const [failedVideoFile, setFailedVideoFile] = useState(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState("");
   const [videoInfo, setVideoInfo] = useState({ name: "", size: 0 });
 
@@ -75,6 +86,9 @@ export default function AdminProjectForm() {
   const galleryFileInputRef = useRef(null);
   const stillsFileInputRef = useRef(null);
   const videoFileInputRef = useRef(null);
+
+  // Global upload guard: Prevents saving or publishing while any media is uploading
+  const isAnyMediaUploading = uploadingCover || uploadingGallery || uploadingStills || videoUploading;
 
   // Load disciplines from MongoDB Atlas
   useEffect(() => {
@@ -172,16 +186,19 @@ export default function AdminProjectForm() {
     const list = Array.from(files || []);
     if (!list.length) return [];
 
+    // Pre-validate all image files (20 MB limit + format check)
+    for (const file of list) {
+      const val = validateMediaFile(file, "image");
+      if (!val.valid) {
+        throw new Error(val.error);
+      }
+    }
+
     if (API_CONFIG.USE_API) {
       return await Promise.all(
         list.map(async (file) => {
-          const formData = new FormData();
-          formData.append("file", file);
-          const res = await apiRequest("/upload", {
-            method: "POST",
-            body: formData,
-          });
-          return res.url || (res.data && res.data.url);
+          const res = await uploadDirectToCloudinary(file, { resourceType: "image" });
+          return res.url;
         })
       );
     } else {
@@ -194,9 +211,9 @@ export default function AdminProjectForm() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > MAX_FILE_SIZE) {
-      const mb = (file.size / (1024 * 1024)).toFixed(1);
-      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+    const val = validateMediaFile(file, "image");
+    if (!val.valid) {
+      toast.push(val.error, "err");
       if (coverFileInputRef.current) coverFileInputRef.current.value = "";
       return;
     }
@@ -210,7 +227,7 @@ export default function AdminProjectForm() {
           cover: urls[0],
           thumbnail: urls[0],
         }));
-        toast.push(isVideo ? "Video thumbnail uploaded." : "Cover image uploaded.");
+        toast.push(isVideo ? "Video poster uploaded." : "Cover photograph uploaded.");
       }
       if (coverFileInputRef.current) coverFileInputRef.current.value = "";
     } catch (err) {
@@ -237,13 +254,13 @@ export default function AdminProjectForm() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
-    if (oversized.length > 0) {
-      const maxOversized = oversized.reduce((max, f) => (f.size > max.size ? f : max), oversized[0]);
-      const mb = (maxOversized.size / (1024 * 1024)).toFixed(1);
-      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
-      if (galleryFileInputRef.current) galleryFileInputRef.current.value = "";
-      return;
+    for (const f of files) {
+      const val = validateMediaFile(f, "image");
+      if (!val.valid) {
+        toast.push(val.error, "err");
+        if (galleryFileInputRef.current) galleryFileInputRef.current.value = "";
+        return;
+      }
     }
 
     setUploadingGallery(true);
@@ -260,7 +277,7 @@ export default function AdminProjectForm() {
           ...prev,
           gallery: [...prev.gallery, ...newItems],
         }));
-        toast.push(`${valid.length} photograph(s) added to gallery.`);
+        toast.push(`${valid.length} photograph(s) uploaded to gallery.`);
       }
       if (galleryFileInputRef.current) galleryFileInputRef.current.value = "";
     } catch (err) {
@@ -303,13 +320,13 @@ export default function AdminProjectForm() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
-    if (oversized.length > 0) {
-      const maxOversized = oversized.reduce((max, f) => (f.size > max.size ? f : max), oversized[0]);
-      const mb = (maxOversized.size / (1024 * 1024)).toFixed(1);
-      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
-      if (stillsFileInputRef.current) stillsFileInputRef.current.value = "";
-      return;
+    for (const f of files) {
+      const val = validateMediaFile(f, "image");
+      if (!val.valid) {
+        toast.push(val.error, "err");
+        if (stillsFileInputRef.current) stillsFileInputRef.current.value = "";
+        return;
+      }
     }
 
     setUploadingStills(true);
@@ -326,7 +343,7 @@ export default function AdminProjectForm() {
           ...prev,
           videoStills: [...(prev.videoStills || []), ...newItems],
         }));
-        toast.push(`${valid.length} video still(s) added.`);
+        toast.push(`${valid.length} video still(s) uploaded.`);
       }
       if (stillsFileInputRef.current) stillsFileInputRef.current.value = "";
     } catch (err) {
@@ -364,54 +381,64 @@ export default function AdminProjectForm() {
     }));
   };
 
-  // Video File Upload (Device -> Cloudinary)
-  const onVideoDeviceFile = async (e) => {
-    const file = e.target.files?.[0];
+  // Video File Upload (Direct-to-Cloudinary with real-time 0-100% progress)
+  const handleVideoUpload = async (file) => {
     if (!file) return;
 
-    if (file.size > MAX_FILE_SIZE) {
-      const mb = (file.size / (1024 * 1024)).toFixed(1);
-      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+    const val = validateMediaFile(file, "video");
+    if (!val.valid) {
+      toast.push(val.error, "err");
       if (videoFileInputRef.current) videoFileInputRef.current.value = "";
       return;
     }
 
     setVideoUploading(true);
+    setVideoUploadProgress(0);
+    setVideoUploadSuccess(false);
+    setVideoUploadError(null);
+    setFailedVideoFile(null);
+    setVideoInfo({ name: file.name, size: file.size });
+
     try {
-      if (API_CONFIG.USE_API) {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await apiRequest("/upload", {
-          method: "POST",
-          body: formData,
-        });
-        const videoUrl = res.url || (res.data && res.data.url);
-        setForm((prev) => ({
-          ...prev,
-          videoUrl,
-          videoProvider: "device",
-          title: prev.title || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
-        }));
-        setVideoPreviewUrl(videoUrl);
-        setVideoInfo({ name: file.name, size: file.size });
-        toast.push(`Video uploaded to Cloudinary: ${file.name}`);
-      } else {
-        const res = await saveDeviceVideoFile(file);
-        setForm((prev) => ({
-          ...prev,
-          videoUrl: res.uri,
-          videoProvider: "device",
-          title: prev.title || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
-        }));
-        setVideoPreviewUrl(res.objectUrl);
-        setVideoInfo({ name: res.fileName, size: res.fileSize });
-        toast.push(`Video loaded from device: ${file.name} (${formatBytes(file.size)})`);
-      }
+      const res = await uploadDirectToCloudinary(file, {
+        resourceType: "video",
+        onProgress: (percent) => {
+          setVideoUploadProgress(percent);
+        },
+      });
+
+      const videoUrl = res.url || res.previewUrl;
+      setForm((prev) => ({
+        ...prev,
+        videoUrl,
+        videoProvider: "device",
+        title: prev.title || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
+      }));
+      setVideoPreviewUrl(videoUrl);
+      setVideoUploadSuccess(true);
+      toast.push(`✓ Video uploaded successfully: ${file.name}`);
       if (videoFileInputRef.current) videoFileInputRef.current.value = "";
     } catch (err) {
-      toast.push(err.message || "Could not upload video file.", "err");
+      console.error("Video Upload Error:", err);
+      const errorMsg = err.message || "Video upload failed. Please try again.";
+      setVideoUploadError(errorMsg);
+      setFailedVideoFile(file);
+      toast.push(errorMsg, "err");
     } finally {
       setVideoUploading(false);
+    }
+  };
+
+  const onVideoDeviceFile = (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleVideoUpload(file);
+  };
+
+  const retryVideoUpload = () => {
+    if (failedVideoFile) {
+      handleVideoUpload(failedVideoFile);
+    } else if (videoFileInputRef.current) {
+      videoFileInputRef.current.click();
     }
   };
 
@@ -451,6 +478,12 @@ export default function AdminProjectForm() {
 
   // Save Project (Draft or Published)
   const handleSave = async (targetStatus) => {
+    // Critical Upload Guard: Block saving or publishing while any media is actively uploading
+    if (isAnyMediaUploading) {
+      toast.push("Please wait for all media uploads to finish before saving.", "err");
+      return;
+    }
+
     const statusToApply = targetStatus || form.status || "draft";
     const payload = {
       ...form,
@@ -497,11 +530,16 @@ export default function AdminProjectForm() {
 
     if (isVideo) {
       if (!payload.videoUrl.trim()) {
-        pubErrs.videoUrl = "Please provide a video source or video URL before publishing.";
+        pubErrs.videoUrl = "Please upload a video or provide an external video URL before publishing.";
       } else {
         const info = getVideoEmbedInfo(payload.videoUrl, payload.videoProvider);
-        if (info.type === "none") {
-          pubErrs.videoUrl = "Please provide a supported YouTube, Vimeo, or direct video file.";
+        if (
+          info.type === "none" &&
+          !payload.videoUrl.startsWith("http") &&
+          !payload.videoUrl.startsWith("blob:") &&
+          !payload.videoUrl.startsWith("idb://")
+        ) {
+          pubErrs.videoUrl = "Please provide a supported YouTube, Vimeo, or direct video stream.";
         }
       }
     }
@@ -1035,102 +1073,231 @@ export default function AdminProjectForm() {
               style={{
                 background: "rgba(0, 70, 67, 0.16)",
                 padding: "1.4rem",
-                borderRadius: "4px",
+                borderRadius: "6px",
                 border: "1px solid rgba(168, 230, 207, 0.3)",
                 display: "flex",
                 flexDirection: "column",
-                gap: "1.1rem",
+                gap: "1.3rem",
                 marginBottom: "1.6rem",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <label style={{ fontWeight: 600, color: "#a8e6cf", margin: 0, fontSize: "0.95rem" }}>
-                  Video Source (Device File or Stream URL) <span className="req">*</span>
-                </label>
-                {videoInfo.name && (
-                  <span style={{ fontSize: "0.72rem", color: "#a8e6cf", opacity: 0.9 }}>
-                    Selected: {videoInfo.name} ({formatBytes(videoInfo.size)})
-                  </span>
+              {/* Option A Header */}
+              <div>
+                <span
+                  style={{
+                    display: "inline-block",
+                    padding: "3px 9px",
+                    borderRadius: "3px",
+                    background: "rgba(168, 230, 207, 0.18)",
+                    color: "#a8e6cf",
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    marginBottom: "0.45rem",
+                  }}
+                >
+                  OPTION A — Direct Video File Upload
+                </span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <label style={{ fontWeight: 600, color: "#a8e6cf", margin: 0, fontSize: "0.95rem" }}>
+                    Upload Video File (Direct to Cloudinary · Up to 100 MB)
+                  </label>
+                  {videoInfo.name && (
+                    <span style={{ fontSize: "0.74rem", color: "#a8e6cf", opacity: 0.9 }}>
+                      {videoInfo.name} ({formatFileSizeMB(videoInfo.size)})
+                    </span>
+                  )}
+                </div>
+                <p style={{ margin: "0.3rem 0 0", fontSize: "0.74rem", color: "var(--muted)" }}>
+                  Uploads high-resolution MP4, MOV, or WEBM directly to Cloudinary without Render timeouts or size limits.
+                </p>
+              </div>
+
+              {/* Upload Action / Progress Area */}
+              <div>
+                <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center" }}>
+                  <label
+                    htmlFor="device-video-file-input"
+                    className="btn btn-outline"
+                    style={{
+                      borderColor: "rgba(168, 230, 207, 0.5)",
+                      color: "#a8e6cf",
+                      cursor: videoUploading ? "not-allowed" : "pointer",
+                      opacity: videoUploading ? 0.6 : 1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "0.6rem 1.1rem",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    <span>📁</span>
+                    {videoUploading ? `Uploading video... ${videoUploadProgress}%` : "Choose Video from Computer"}
+                  </label>
+                  <input
+                    id="device-video-file-input"
+                    ref={videoFileInputRef}
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/webm,video/*"
+                    onChange={onVideoDeviceFile}
+                    disabled={videoUploading}
+                    style={{ display: "none" }}
+                  />
+
+                  {videoUploadSuccess && !videoUploading && (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        color: "#a8e6cf",
+                        fontSize: "0.78rem",
+                        fontWeight: 500,
+                        background: "rgba(168, 230, 207, 0.12)",
+                        padding: "0.4rem 0.8rem",
+                        borderRadius: "4px",
+                        border: "1px solid rgba(168, 230, 207, 0.3)",
+                      }}
+                    >
+                      ✓ Video uploaded successfully
+                    </span>
+                  )}
+                </div>
+
+                {/* Progress Bar (0% to 100%) */}
+                {videoUploading && (
+                  <div style={{ marginTop: "0.9rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", color: "#a8e6cf", marginBottom: "0.35rem" }}>
+                      <span>Uploading video... {videoUploadProgress}%</span>
+                      <span>{videoInfo.name || "video stream"}</span>
+                    </div>
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "8px",
+                        background: "rgba(0, 0, 0, 0.4)",
+                        borderRadius: "4px",
+                        overflow: "hidden",
+                        border: "1px solid rgba(168, 230, 207, 0.3)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${videoUploadProgress}%`,
+                          height: "100%",
+                          background: "linear-gradient(90deg, #128C7E, #a8e6cf)",
+                          transition: "width 0.2s ease-out",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload Error & Retry */}
+                {videoUploadError && !videoUploading && (
+                  <div
+                    style={{
+                      marginTop: "0.9rem",
+                      padding: "0.85rem",
+                      background: "rgba(139, 46, 46, 0.2)",
+                      border: "1px solid rgba(139, 46, 46, 0.5)",
+                      borderRadius: "4px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "0.8rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.78rem", color: "#f87171" }}>
+                      ⚠️ {videoUploadError}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={retryVideoUpload}
+                      className="btn btn-outline"
+                      style={{
+                        borderColor: "#f87171",
+                        color: "#f87171",
+                        padding: "0.3rem 0.8rem",
+                        fontSize: "0.74rem",
+                      }}
+                    >
+                      Retry Upload
+                    </button>
+                  </div>
                 )}
               </div>
 
-              {/* Device file upload */}
-              <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", alignItems: "center" }}>
-                <label
-                  htmlFor="device-video-file-input"
-                  className="btn btn-outline"
+              {/* Option B Header & External URL */}
+              <div style={{ borderTop: "1px dashed rgba(168, 230, 207, 0.25)", paddingTop: "1.1rem" }}>
+                <span
                   style={{
-                    borderColor: "rgba(168, 230, 207, 0.5)",
-                    color: "#a8e6cf",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    padding: "0.55rem 1rem",
-                    fontSize: "0.76rem",
+                    display: "inline-block",
+                    padding: "3px 9px",
+                    borderRadius: "3px",
+                    background: "rgba(241, 235, 235, 0.1)",
+                    color: "var(--stone)",
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    marginBottom: "0.45rem",
                   }}
                 >
-                  <span>📁</span> {videoUploading ? "Uploading video to Cloudinary..." : "Choose video from device"}
-                </label>
-                <input
-                  id="device-video-file-input"
-                  ref={videoFileInputRef}
-                  type="file"
-                  accept="video/mp4,video/webm,video/ogg,video/quicktime,video/*"
-                  onChange={onVideoDeviceFile}
-                  disabled={videoUploading}
-                  style={{ display: "none" }}
-                />
-                <span style={{ fontSize: "0.74rem", color: "var(--muted)" }}>
-                  Uploads directly to Cloudinary (MP4, WebM, MOV supported up to 100MB).
+                  OPTION B — External Video URL
                 </span>
-              </div>
+                <span style={{ fontSize: "0.72rem", color: "var(--muted)", display: "block", marginBottom: "0.6rem" }}>
+                  (Optional if you uploaded a video file via Option A)
+                </span>
 
-              {/* URL, Provider, and Duration */}
-              <div className="form-row">
-                <div className="field" style={{ flex: 2 }}>
-                  <label style={{ fontSize: "0.74rem", color: "var(--muted)" }}>
-                    Or paste online video URL (YouTube, Vimeo, or direct MP4 stream)
-                  </label>
-                  <input
-                    value={form.videoUrl}
-                    onChange={(e) => {
-                      set("videoUrl", e.target.value);
-                      setVideoPreviewUrl(e.target.value);
-                    }}
-                    placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/... or .mp4 URL"
-                  />
-                  {errors.videoUrl && <div className="error">{errors.videoUrl}</div>}
-                </div>
+                <div className="form-row">
+                  <div className="field" style={{ flex: 2 }}>
+                    <label style={{ fontSize: "0.74rem", color: "var(--muted)" }}>
+                      YouTube, Vimeo, or Direct Stream URL
+                    </label>
+                    <input
+                      value={form.videoUrl}
+                      onChange={(e) => {
+                        set("videoUrl", e.target.value);
+                        setVideoPreviewUrl(e.target.value);
+                        setVideoUploadError(null);
+                      }}
+                      placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/... or Cloudinary video URL"
+                    />
+                    {errors.videoUrl && <div className="error">{errors.videoUrl}</div>}
+                  </div>
 
-                <div className="field" style={{ flex: 1 }}>
-                  <label>Platform / Provider</label>
-                  <select
-                    value={form.videoProvider}
-                    onChange={(e) => set("videoProvider", e.target.value)}
-                  >
-                    <option value="auto">Auto-detect from source</option>
-                    <option value="device">Device upload</option>
-                    <option value="youtube">YouTube</option>
-                    <option value="vimeo">Vimeo</option>
-                    <option value="mp4">Direct MP4/WebM stream</option>
-                  </select>
-                </div>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>Platform / Provider</label>
+                    <select
+                      value={form.videoProvider}
+                      onChange={(e) => set("videoProvider", e.target.value)}
+                    >
+                      <option value="auto">Auto-detect from source</option>
+                      <option value="device">Uploaded video</option>
+                      <option value="youtube">YouTube</option>
+                      <option value="vimeo">Vimeo</option>
+                      <option value="mp4">Direct MP4/WebM stream</option>
+                    </select>
+                  </div>
 
-                <div className="field" style={{ flex: 1 }}>
-                  <label>Film Duration</label>
-                  <input
-                    value={form.duration}
-                    onChange={(e) => set("duration", e.target.value)}
-                    placeholder="e.g. 03:40 or 1m 30s"
-                  />
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>Film Duration</label>
+                    <input
+                      value={form.duration}
+                      onChange={(e) => set("duration", e.target.value)}
+                      placeholder="e.g. 03:40 or 1m 30s"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Live Video Preview Box */}
-              {form.videoUrl && embedInfo && embedInfo.type !== "none" && (
-                <div>
-                  <label style={{ fontSize: "0.72rem", color: "var(--stone)", marginBottom: "0.35rem", display: "block" }}>
+              {form.videoUrl && (
+                <div style={{ borderTop: "1px solid rgba(168, 230, 207, 0.2)", paddingTop: "0.9rem" }}>
+                  <label style={{ fontSize: "0.75rem", color: "var(--stone)", marginBottom: "0.4rem", display: "block", fontWeight: 600 }}>
                     Live Video Playback Preview:
                   </label>
                   <div
@@ -1145,7 +1312,14 @@ export default function AdminProjectForm() {
                       border: "1px solid rgba(241, 235, 235, 0.15)",
                     }}
                   >
-                    {embedInfo.type === "video" || form.videoUrl.startsWith("blob:") || form.videoUrl.startsWith("idb://") ? (
+                    {embedInfo && (embedInfo.type === "youtube" || embedInfo.type === "vimeo") ? (
+                      <iframe
+                        src={embedInfo.embedUrl}
+                        title="Video Preview"
+                        style={{ width: "100%", height: "100%", border: 0 }}
+                        allowFullScreen
+                      />
+                    ) : (
                       <video
                         controls
                         playsInline
@@ -1153,14 +1327,7 @@ export default function AdminProjectForm() {
                         src={videoPreviewUrl || form.videoUrl}
                         style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
                       />
-                    ) : embedInfo.type === "youtube" || embedInfo.type === "vimeo" ? (
-                      <iframe
-                        src={embedInfo.embedUrl}
-                        title="Video Preview"
-                        style={{ width: "100%", height: "100%", border: 0 }}
-                        allowFullScreen
-                      />
-                    ) : null}
+                    )}
                   </div>
                 </div>
               )}
@@ -1487,6 +1654,29 @@ export default function AdminProjectForm() {
             </div>
           </div>
 
+          {/* Upload Blocking Warning Banner */}
+          {isAnyMediaUploading && (
+            <div
+              style={{
+                marginTop: "1rem",
+                padding: "0.85rem 1.1rem",
+                background: "rgba(102, 8, 16, 0.25)",
+                border: "1px solid var(--cyprus)",
+                borderRadius: "4px",
+                color: "var(--stone)",
+                fontSize: "0.82rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+              }}
+            >
+              <span style={{ fontSize: "1.1rem" }}>⏳</span>
+              <span>
+                <strong>Please wait for all media uploads to finish before publishing.</strong> Uploading media safely to Cloudinary...
+              </span>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div
             style={{
@@ -1501,32 +1691,36 @@ export default function AdminProjectForm() {
             <button
               type="button"
               className="btn btn-outline"
-              disabled={processing || videoUploading}
+              disabled={processing || isAnyMediaUploading}
               onClick={() => handleSave("draft")}
+              title={isAnyMediaUploading ? "Please wait for all media uploads to finish" : "Save as Draft"}
               style={{
                 borderColor: "var(--sand)",
                 color: "var(--sand)",
                 padding: "0.75rem 1.6rem",
                 fontSize: "0.85rem",
-                cursor: "pointer",
+                cursor: isAnyMediaUploading ? "not-allowed" : "pointer",
+                opacity: isAnyMediaUploading ? 0.6 : 1,
               }}
             >
-              ✎ Save as Draft
+              {isAnyMediaUploading ? "Uploading Media..." : "✎ Save as Draft"}
             </button>
 
             <button
               type="button"
               className="btn btn-sand"
-              disabled={processing || videoUploading}
+              disabled={processing || isAnyMediaUploading}
               onClick={() => handleSave("published")}
+              title={isAnyMediaUploading ? "Please wait for all media uploads to finish" : "Publish Project"}
               style={{
                 padding: "0.75rem 1.8rem",
                 fontSize: "0.85rem",
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: isAnyMediaUploading ? "not-allowed" : "pointer",
+                opacity: isAnyMediaUploading ? 0.6 : 1,
               }}
             >
-              ✓ Publish Project
+              {isAnyMediaUploading ? "Uploading Media..." : "✓ Publish Project"}
             </button>
 
             <Link

@@ -53,7 +53,7 @@ const handleUpload = (req, res, next) => {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({
           success: false,
-          message: "This file is too large. Please upload a file smaller than 10 MB.",
+          message: "This file is too large. The maximum allowed file size is 100 MB for videos and 20 MB for images.",
         });
       }
       return res.status(400).json({

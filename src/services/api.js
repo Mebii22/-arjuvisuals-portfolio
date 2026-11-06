@@ -4,9 +4,10 @@
  * backend and Cloudinary uploads are ready.
  */
 const getBaseUrl = () => {
-  let url = import.meta.env.VITE_API_URL;
+  const env = (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : (typeof process !== "undefined" ? process.env : {});
+  let url = env.VITE_API_URL;
   if (!url) {
-    url = import.meta.env.PROD
+    url = env.PROD || env.NODE_ENV === "production"
       ? "https://arjuvisuals-api.onrender.com/api"
       : "http://localhost:5001/api";
   }

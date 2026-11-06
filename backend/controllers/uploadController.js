@@ -2,7 +2,59 @@ const streamifier = require("streamifier");
 const cloudinary = require("../config/cloudinary");
 
 /**
- * @desc    Upload an image or video file to Cloudinary
+ * @desc    Generate secure signature for direct client-to-Cloudinary uploads
+ *          Large video and photo files stream directly from the browser to Cloudinary,
+ *          bypassing the Render backend to prevent timeouts and request-size limits.
+ * @route   POST /api/upload/sign
+ * @access  Private (Admin only)
+ */
+const getUploadSignature = async (req, res) => {
+  try {
+    if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_CLOUD_NAME) {
+      return res.status(500).json({
+        success: false,
+        message: "Cloudinary credentials are not configured on the server.",
+      });
+    }
+
+    const timestamp = Math.round(new Date().getTime() / 1000);
+    const folder = req.body.folder || "arjuvisuals";
+    const resourceType = req.body.resourceType === "video" ? "video" : "auto";
+
+    // Parameters signed with CLOUDINARY_API_SECRET (secret is NEVER sent to frontend)
+    const paramsToSign = {
+      folder,
+      timestamp,
+    };
+
+    const signature = cloudinary.utils.api_sign_request(
+      paramsToSign,
+      process.env.CLOUDINARY_API_SECRET
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        signature,
+        timestamp,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        folder,
+        resourceType,
+      },
+    });
+  } catch (error) {
+    console.error("Cloudinary Signature Error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate upload authorization signature.",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Upload an image or video file to Cloudinary (Server-streamed fallback)
  * @route   POST /api/upload
  * @access  Private (Admin only)
  */
@@ -60,7 +112,7 @@ const uploadMedia = async (req, res) => {
     if (error.message && (error.message.toLowerCase().includes("file size") || error.http_code === 400)) {
       return res.status(400).json({
         success: false,
-        message: "This file is too large. Please upload a file smaller than 10 MB.",
+        message: "This file exceeds Cloudinary's size limit. Maximum allowed size is 100 MB for videos and 20 MB for images.",
       });
     }
     res.status(500).json({
@@ -70,5 +122,5 @@ const uploadMedia = async (req, res) => {
   }
 };
 
-module.exports = { uploadMedia };
+module.exports = { getUploadSignature, uploadMedia };
 

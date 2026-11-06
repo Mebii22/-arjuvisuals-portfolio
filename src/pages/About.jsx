@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { HiArrowUpRight, HiOutlineEnvelope, HiOutlinePhone } from "react-icons/hi2";
+import { FaWhatsapp, FaInstagram } from "react-icons/fa6";
 import SEO from "../components/SEO";
 import Reveal from "../components/Reveal";
 import ComboCTA from "../components/ComboCTA";
@@ -10,7 +12,6 @@ import { projectService } from "../services/projectService";
 import { serviceService } from "../services/serviceService";
 import SoftwareSkills from "../components/SoftwareSkills";
 import AboutEditorialCollage from "../components/AboutEditorialCollage";
-import { formatWhatsAppUrl } from "../data/photographer";
 
 const NUMBER_WORDS = [
   "ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT",
@@ -22,12 +23,52 @@ export default function About() {
   const { profile } = useProfile();
   const [projects, setProjects] = useState([]);
   const [services, setServices] = useState([]);
-  const wa = formatWhatsAppUrl(profile.whatsapp);
 
   useEffect(() => {
     projectService.list().then((list) => setProjects(list || [])).catch(() => setProjects([]));
     serviceService.list().then((list) => setServices(list || [])).catch(() => setServices([]));
   }, []);
+
+  const cleanPhoneTel = useMemo(() => {
+    if (!profile.phone) return "";
+    return `tel:${String(profile.phone).trim().replace(/[^\d+]/g, "")}`;
+  }, [profile.phone]);
+
+  const cleanWhatsAppDigits = useMemo(() => {
+    const raw = String(profile.whatsapp || profile.phone || "").replace(/\D/g, "");
+    if (!raw) return "";
+    return raw.length === 10 ? `91${raw}` : raw;
+  }, [profile.whatsapp, profile.phone]);
+
+  const whatsappUrl = useMemo(() => {
+    if (!cleanWhatsAppDigits) return "";
+    return `https://wa.me/${cleanWhatsAppDigits}`;
+  }, [cleanWhatsAppDigits]);
+
+  const whatsappDisplay = useMemo(() => {
+    return profile.whatsapp || profile.phone || "Chat on WhatsApp";
+  }, [profile.whatsapp, profile.phone]);
+
+  const instagramUrl = useMemo(() => {
+    if (!profile.instagram) {
+      if (profile.instagramHandle) {
+        return `https://instagram.com/${profile.instagramHandle.replace(/^@/, "").trim()}`;
+      }
+      return "";
+    }
+    const clean = profile.instagram.trim();
+    if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+    return `https://instagram.com/${clean.replace(/^@/, "").replace(/\/$/, "")}`;
+  }, [profile.instagram, profile.instagramHandle]);
+
+  const instagramDisplay = useMemo(() => {
+    if (profile.instagramHandle) return profile.instagramHandle;
+    if (profile.instagram) {
+      const handle = profile.instagram.trim().replace(/\/$/, "").split("/").pop();
+      return handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "@Arjuvisuals.co";
+    }
+    return "@Arjuvisuals.co";
+  }, [profile.instagramHandle, profile.instagram]);
 
   const paras = (profile.biography || "").split("\n").filter(Boolean);
 
@@ -85,27 +126,87 @@ export default function About() {
                 <span className="about-meta-chip">Visual Editing</span>
               </div>
 
-              <div className="about-contact-row" style={{ marginTop: "1.2rem", display: "flex", flexWrap: "wrap", gap: "0.5rem 1.2rem", fontSize: "0.85rem" }}>
-                {profile.phone && (
-                  <a href={`tel:${profile.phone}`} style={{ color: "var(--cyprus)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                    <span style={{ color: "var(--muted-dark)", textTransform: "uppercase", fontSize: "0.72rem", letterSpacing: "0.06em" }}>Phone</span> {profile.phone}
-                  </a>
-                )}
-                {profile.email && (
-                  <a href={`mailto:${profile.email}`} style={{ color: "var(--cyprus)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                    <span style={{ color: "var(--muted-dark)", textTransform: "uppercase", fontSize: "0.72rem", letterSpacing: "0.06em" }}>Email</span> {profile.email}
-                  </a>
-                )}
-                {wa && (
-                  <a href={wa} target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyprus)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                    <span style={{ color: "var(--muted-dark)", textTransform: "uppercase", fontSize: "0.72rem", letterSpacing: "0.06em" }}>WhatsApp</span> +91 {profile.phone || "7736591311"}
-                  </a>
-                )}
-                {profile.instagram && (
-                  <a href={profile.instagram} target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyprus)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                    <span style={{ color: "var(--muted-dark)", textTransform: "uppercase", fontSize: "0.72rem", letterSpacing: "0.06em" }}>Instagram</span> {profile.instagramHandle || "@Arjuvisuals.co"}
-                  </a>
-                )}
+              <div className="about-contact-section" style={{ marginTop: "1.6rem" }}>
+                <p className="kicker" style={{ color: "var(--cyprus)", marginBottom: "0.75rem", fontSize: "0.72rem" }}>
+                  Connect with Arjun — Direct Contact
+                </p>
+                <div className="direct-contact-list">
+                  {/* Email */}
+                  {profile.email && (
+                    <a
+                      href={`mailto:${profile.email.trim()}`}
+                      className="direct-contact-item"
+                      title={`Email ${profile.name || "Arjun Murali"}`}
+                    >
+                      <div className="direct-contact-icon email" aria-hidden="true">
+                        <HiOutlineEnvelope size={20} />
+                      </div>
+                      <div className="direct-contact-details">
+                        <span className="direct-contact-label">Email</span>
+                        <span className="direct-contact-value">{profile.email}</span>
+                      </div>
+                      <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
+                    </a>
+                  )}
+
+                  {/* Phone */}
+                  {profile.phone && (
+                    <a
+                      href={cleanPhoneTel}
+                      className="direct-contact-item"
+                      title={`Call ${profile.name || "Arjun Murali"}`}
+                    >
+                      <div className="direct-contact-icon phone" aria-hidden="true">
+                        <HiOutlinePhone size={20} />
+                      </div>
+                      <div className="direct-contact-details">
+                        <span className="direct-contact-label">Phone</span>
+                        <span className="direct-contact-value">{profile.phone}</span>
+                      </div>
+                      <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
+                    </a>
+                  )}
+
+                  {/* WhatsApp */}
+                  {whatsappUrl && (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="direct-contact-item"
+                      title="Chat on WhatsApp"
+                    >
+                      <div className="direct-contact-icon whatsapp" aria-hidden="true">
+                        <FaWhatsapp size={20} />
+                      </div>
+                      <div className="direct-contact-details">
+                        <span className="direct-contact-label">WhatsApp</span>
+                        <span className="direct-contact-value">{whatsappDisplay}</span>
+                      </div>
+                      <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
+                    </a>
+                  )}
+
+                  {/* Instagram */}
+                  {instagramUrl && (
+                    <a
+                      href={instagramUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="direct-contact-item"
+                      title="View Instagram Profile"
+                    >
+                      <div className="direct-contact-icon instagram" aria-hidden="true">
+                        <FaInstagram size={20} />
+                      </div>
+                      <div className="direct-contact-details">
+                        <span className="direct-contact-label">Instagram</span>
+                        <span className="direct-contact-value">{instagramDisplay}</span>
+                      </div>
+                      <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
+                    </a>
+                  )}
+                </div>
               </div>
             </Reveal>
           </div>
@@ -161,17 +262,17 @@ export default function About() {
             <p className="kicker" style={{ color: "var(--cyprus)" }}>
               Place &amp; Inquiries
             </p>
-            <h3>{profile.location}</h3>
+            <h3>{profile.location || "Thrissur, Kerala"}</h3>
             <p>
               Freelance photography and visual editing. Direct inquiries welcome via{" "}
               {profile.phone && (
-                <a href={`tel:${profile.phone}`} style={{ textDecoration: "underline", color: "inherit" }}>
+                <a href={cleanPhoneTel || `tel:${profile.phone}`} style={{ textDecoration: "underline", color: "inherit" }}>
                   phone ({profile.phone})
                 </a>
               )}
-              {profile.phone && wa && ", "}
-              {wa && (
-                <a href={wa} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline", color: "inherit" }}>
+              {profile.phone && whatsappUrl && ", "}
+              {whatsappUrl && (
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline", color: "inherit" }}>
                   WhatsApp
                 </a>
               )}
