@@ -6,6 +6,8 @@ import { API_CONFIG, apiRequest } from "../../services/api";
 import { useToast } from "../../context/ToastContext";
 import { compressImageFile } from "../../utils/imageUtils";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
+
 export default function AdminPhotos() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -108,6 +110,15 @@ export default function AdminPhotos() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
+    const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      const maxOversized = oversized.reduce((max, f) => (f.size > max.size ? f : max), oversized[0]);
+      const mb = (maxOversized.size / (1024 * 1024)).toFixed(1);
+      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setUploading(true);
     try {
       const items = await processFiles(files);
@@ -170,6 +181,13 @@ export default function AdminPhotos() {
   const handleCoverFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !activeProject) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      const mb = (file.size / (1024 * 1024)).toFixed(1);
+      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+      if (coverFileInputRef.current) coverFileInputRef.current.value = "";
+      return;
+    }
 
     setUploadingCover(true);
     try {

@@ -70,57 +70,90 @@ const createInquiry = async (req, res) => {
     });
 
     // Send notification email to admin via nodemailer (fail-safe)
+    let emailSent = false;
+    let emailErrorMsg = null;
     try {
       const nodemailer = require("nodemailer");
       const host = process.env.SMTP_HOST || process.env.EMAIL_HOST;
       const user = process.env.SMTP_USER || process.env.EMAIL_USER;
       const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
       const port = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
-      const adminEmail = process.env.ADMIN_EMAIL || user || "arjunmurali@arjuvisuals.co";
+      const adminEmail = process.env.ADMIN_EMAIL || user || "arjuvisuals.co@gmail.com";
 
-      if (host && user && pass) {
-        const transporter = nodemailer.createTransport({
-          host,
-          port,
-          secure: port === 465,
-          auth: { user, pass },
+      if (user && pass) {
+        const transportConfig = host
+          ? {
+              host,
+              port,
+              secure: port === 465,
+              auth: { user, pass },
+            }
+          : {
+              service: "gmail",
+              auth: { user, pass },
+            };
+
+        const transporter = nodemailer.createTransport(transportConfig);
+
+        const inquiryTimestamp = new Date().toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
+          dateStyle: "full",
+          timeStyle: "medium",
         });
 
         const mailOptions = {
-          from: `"ArjuVisuals Inquiry" <${user}>`,
+          from: `"ArjuVisuals Portfolio" <${user}>`,
           to: adminEmail,
           replyTo: email.trim(),
-          subject: `New Inquiry from ${name.trim()} [${service.trim()}]`,
+          subject: `New Inquiry from ${name.trim()} — ArjuVisuals.co`,
           html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 6px;">
-              <h2 style="color: #004643; margin-top: 0;">New Inquiry on ArjuVisuals.co</h2>
-              <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                <tr><td style="padding: 8px 0; font-weight: bold; width: 120px;">Client Name:</td><td>${name.trim()}</td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Client Email:</td><td><a href="mailto:${email.trim()}">${email.trim()}</a></td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Phone:</td><td><a href="tel:${phone.trim()}">${phone.trim() || "Not provided"}</a></td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Service:</td><td>${service.trim()}</td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Date / Timeline:</td><td>${eventDate.trim() || "Flexible / Not specified"}</td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Location:</td><td>${location.trim() || "Not provided"}</td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Budget:</td><td>${budget.trim() || "Not provided"}</td></tr>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; color: #1a202c;">
+              <div style="border-bottom: 2px solid #004643; padding-bottom: 12px; margin-bottom: 20px;">
+                <h2 style="color: #004643; margin: 0; font-size: 20px;">New Inquiry Received — ArjuVisuals.co</h2>
+                <p style="color: #718096; margin: 4px 0 0; font-size: 13px;">Date &amp; Time: ${inquiryTimestamp}</p>
+              </div>
+
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: bold; width: 140px; color: #4a5568;">Customer Name:</td><td style="padding: 10px 0; color: #1a202c; font-weight: 600;">${name.trim()}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: bold; color: #4a5568;">Customer Email:</td><td style="padding: 10px 0;"><a href="mailto:${email.trim()}" style="color: #004643; font-weight: 500;">${email.trim()}</a></td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: bold; color: #4a5568;">Customer Phone:</td><td style="padding: 10px 0;"><a href="tel:${phone.trim()}" style="color: #004643;">${phone.trim() || "Not provided"}</a></td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: bold; color: #4a5568;">Requested Service:</td><td style="padding: 10px 0; font-weight: 600; color: #004643;">${service.trim()}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: bold; color: #4a5568;">Preferred Date / Timeline:</td><td style="padding: 10px 0; color: #1a202c;">${eventDate.trim() || "Flexible / TBC"}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: bold; color: #4a5568;">Location:</td><td style="padding: 10px 0; color: #1a202c;">${location.trim() || "Not specified"}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 10px 0; font-weight: bold; color: #4a5568;">Budget:</td><td style="padding: 10px 0; color: #1a202c;">${budget.trim() || "Not specified"}</td></tr>
               </table>
-              <h3 style="color: #004643; margin-bottom: 6px;">Project Details / Message:</h3>
-              <div style="background: #f7f7f7; padding: 14px; border-left: 4px solid #004643; border-radius: 4px; white-space: pre-line;">${message.trim()}</div>
-              <p style="font-size: 12px; color: #888; margin-top: 24px;">Click Reply in your email client to email ${name.trim()} directly at ${email.trim()}.</p>
+
+              <div style="margin-top: 16px;">
+                <h3 style="color: #004643; font-size: 15px; margin: 0 0 8px;">Customer Message:</h3>
+                <div style="background: #f7fafc; padding: 16px; border-left: 4px solid #004643; border-radius: 4px; white-space: pre-line; font-size: 14px; line-height: 1.6; color: #2d3748;">
+                  ${message.trim()}
+                </div>
+              </div>
+
+              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096;">
+                💡 <em>Click <strong>Reply</strong> in your email client to email <strong>${name.trim()}</strong> directly at <strong>${email.trim()}</strong>.</em>
+              </div>
             </div>
           `,
         };
 
         await transporter.sendMail(mailOptions);
-        console.log(`Inquiry notification email sent to ${adminEmail}`);
+        emailSent = true;
+        console.log(`[Inquiry] Notification email sent successfully to ${adminEmail}`);
+      } else {
+        console.log("[Inquiry] SMTP credentials (SMTP_USER/SMTP_PASS) not configured, email notification skipped.");
       }
     } catch (emailErr) {
-      console.warn("Inquiry email notification skipped or encountered an error:", emailErr.message);
+      emailErrorMsg = emailErr.message;
+      console.warn("[Inquiry] Email notification failed:", emailErr.message);
       // Fail-safe: Inquiry is already successfully saved to MongoDB Atlas!
     }
 
     res.status(201).json({
       success: true,
       message: "Inquiry submitted successfully",
+      emailSent,
+      emailError: emailErrorMsg,
       data: inquiry,
     });
   } catch (error) {
@@ -225,7 +258,7 @@ const updateInquiry = async (req, res) => {
     const updateData = {};
     if (req.body.status !== undefined) {
       const st = String(req.body.status).toLowerCase().trim();
-      if (["new", "reviewed", "responded", "archived"].includes(st)) {
+      if (["new", "contacted", "responded", "closed", "reviewed", "archived"].includes(st)) {
         updateData.status = st;
       }
     }

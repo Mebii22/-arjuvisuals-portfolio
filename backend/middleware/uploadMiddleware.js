@@ -50,13 +50,17 @@ const upload = multer({
 const handleUpload = (req, res, next) => {
   upload.single("file")(req, res, (err) => {
     if (err instanceof multer.MulterError) {
-      // Multer-specific error (e.g. file size limit exceeded)
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          success: false,
+          message: "This file is too large. Please upload a file smaller than 10 MB.",
+        });
+      }
       return res.status(400).json({
         success: false,
         message: `Upload error: ${err.message}`,
       });
     } else if (err) {
-      // File filter validation error
       return res.status(400).json({
         success: false,
         message: err.message,

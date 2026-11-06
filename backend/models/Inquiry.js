@@ -50,8 +50,8 @@ const inquirySchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ["new", "reviewed", "responded", "archived"],
-        message: "Status must be new, reviewed, responded, or archived",
+        values: ["new", "contacted", "responded", "closed", "reviewed", "archived"],
+        message: "Status must be new, contacted, responded, closed, reviewed, or archived",
       },
       default: "new",
       lowercase: true,

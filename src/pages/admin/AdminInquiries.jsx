@@ -37,6 +37,13 @@ export default function AdminInquiries() {
 
   const cleanPhoneDigits = (phone) => String(phone || "").replace(/\D/g, "");
 
+  const buildWhatsAppUrl = (phone, name, service) => {
+    const digits = cleanPhoneDigits(phone);
+    if (!digits) return null;
+    const text = `Hello ${name},\n\nThank you for contacting ArjuVisuals.co regarding ${service || "our services"}.\n\nWe received your inquiry and would be happy to discuss your project.\n\n— ArjuVisuals`;
+    return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+  };
+
   return (
     <>
       <SEO title="Inquiries" />
@@ -60,12 +67,7 @@ export default function AdminInquiries() {
           </thead>
           <tbody>
             {list.map((i) => {
-              const digits = cleanPhoneDigits(i.phone);
-              const waUrl = digits
-                ? `https://wa.me/${digits}?text=${encodeURIComponent(
-                    `Hello ${i.name}, thank you for contacting ArjuVisuals regarding ${i.service}. We received your inquiry and would love to connect!`
-                  )}`
-                : null;
+              const waUrl = buildWhatsAppUrl(i.phone, i.name, i.service);
               const mailtoUrl = `mailto:${i.email}?subject=${encodeURIComponent(
                 `ArjuVisuals — Inquiry regarding ${i.service}`
               )}&body=${encodeURIComponent(
@@ -100,7 +102,29 @@ export default function AdminInquiries() {
                     )}
                   </td>
                   <td>
-                    <span className={`pill ${i.status === "new" ? "new" : "pub"}`}>{i.status}</span>
+                    <select
+                      value={i.status || "new"}
+                      onChange={(e) => update(i.id || i._id, { status: e.target.value })}
+                      style={{
+                        padding: "0.25rem 0.5rem",
+                        fontSize: "0.75rem",
+                        background: "var(--dark-surface, #18181b)",
+                        color:
+                          i.status === "new"
+                            ? "var(--sand)"
+                            : i.status === "closed"
+                            ? "var(--muted)"
+                            : "var(--stone)",
+                        border: "1px solid var(--dark-border)",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="new">New</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="responded">Responded</option>
+                      <option value="closed">Closed</option>
+                    </select>
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -166,27 +190,6 @@ export default function AdminInquiries() {
                           <HiOutlinePhone size={13} /> Call
                         </a>
                       )}
-
-                      {/* Status Toggle Button */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          update(i.id || i._id, {
-                            status: i.status === "new" ? "responded" : "new",
-                          })
-                        }
-                        title={i.status === "new" ? "Mark as Responded / Contacted" : "Mark as New"}
-                        style={{
-                          padding: "0.3rem 0.55rem",
-                          fontSize: "0.74rem",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.3rem",
-                        }}
-                      >
-                        <HiOutlineCheck size={13} />
-                        {i.status === "new" ? "Contacted" : "New"}
-                      </button>
 
                       {/* View Details Modal */}
                       <button
@@ -267,11 +270,9 @@ export default function AdminInquiries() {
                 <HiOutlineEnvelope size={15} /> Reply by Email
               </a>
 
-              {cleanPhoneDigits(open.phone) && (
+              {buildWhatsAppUrl(open.phone, open.name, open.service) && (
                 <a
-                  href={`https://wa.me/${cleanPhoneDigits(open.phone)}?text=${encodeURIComponent(
-                    `Hello ${open.name}, thank you for contacting ArjuVisuals regarding ${open.service}. We received your inquiry and would love to connect!`
-                  )}`}
+                  href={buildWhatsAppUrl(open.phone, open.name, open.service)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-outline"
@@ -356,13 +357,13 @@ export default function AdminInquiries() {
             <div className="field">
               <label>Inquiry Status</label>
               <select
-                value={open.status}
+                value={open.status || "new"}
                 onChange={(e) => update(open.id || open._id, { status: e.target.value })}
               >
                 <option value="new">New</option>
-                <option value="reviewed">Reviewed</option>
-                <option value="responded">Responded / Contacted</option>
-                <option value="archived">Archived</option>
+                <option value="contacted">Contacted</option>
+                <option value="responded">Responded</option>
+                <option value="closed">Closed</option>
               </select>
             </div>
 

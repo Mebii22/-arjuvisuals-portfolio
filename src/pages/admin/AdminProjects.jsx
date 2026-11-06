@@ -50,7 +50,16 @@ export default function AdminProjects() {
   };
 
   const availableCategories = useMemo(() => {
-    return getCategoriesForType(typeFilter, projects);
+    const list = [];
+    (projects || []).forEach((p) => {
+      const pType = p.type || "photography";
+      if (typeFilter !== "all" && pType !== typeFilter) return;
+      const catName = p.discipline || p.category;
+      if (catName && !list.includes(catName)) {
+        list.push(catName);
+      }
+    });
+    return list;
   }, [typeFilter, projects]);
 
   const counts = useMemo(() => {

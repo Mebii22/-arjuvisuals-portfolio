@@ -57,6 +57,12 @@ const uploadMedia = async (req, res) => {
     });
   } catch (error) {
     console.error("Cloudinary Upload Error:", error.message);
+    if (error.message && (error.message.toLowerCase().includes("file size") || error.http_code === 400)) {
+      return res.status(400).json({
+        success: false,
+        message: "This file is too large. Please upload a file smaller than 10 MB.",
+      });
+    }
     res.status(500).json({
       success: false,
       message: "Media upload failed. Please verify Cloudinary credentials and network connection.",

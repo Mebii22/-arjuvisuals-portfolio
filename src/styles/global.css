@@ -1184,6 +1184,129 @@ h1, h2, h3, h4, p {
   gap: clamp(2rem, 5vw, 5rem);
 }
 
+/* Direct Contact Details Section */
+.direct-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.direct-contact-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.15rem;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--black);
+  transition: transform 0.22s var(--ease), border-color 0.22s var(--ease), box-shadow 0.22s var(--ease);
+  box-shadow: 0 2px 6px rgba(39, 7, 7, 0.03);
+}
+
+.direct-contact-item:hover {
+  transform: translateX(4px);
+  border-color: var(--cyprus);
+  box-shadow: 0 6px 18px rgba(102, 8, 16, 0.09);
+}
+
+.direct-contact-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 8px;
+  transition: transform 0.22s var(--ease);
+}
+
+.direct-contact-item:hover .direct-contact-icon {
+  transform: scale(1.06);
+}
+
+.direct-contact-icon.email {
+  background: rgba(102, 8, 16, 0.08);
+  color: var(--cyprus);
+  border: 1px solid rgba(102, 8, 16, 0.18);
+}
+
+.direct-contact-icon.phone {
+  background: rgba(102, 8, 16, 0.08);
+  color: var(--cyprus);
+  border: 1px solid rgba(102, 8, 16, 0.18);
+}
+
+.direct-contact-icon.whatsapp {
+  background: rgba(37, 211, 102, 0.12);
+  color: #128C7E;
+  border: 1px solid rgba(37, 211, 102, 0.28);
+}
+
+.direct-contact-icon.instagram {
+  background: rgba(225, 48, 108, 0.1);
+  color: #C13584;
+  border: 1px solid rgba(225, 48, 108, 0.25);
+}
+
+.direct-contact-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.direct-contact-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted-dark);
+  font-weight: 500;
+  line-height: 1.2;
+  margin-bottom: 0.2rem;
+}
+
+.direct-contact-value {
+  font-size: clamp(0.88rem, 2vw, 0.96rem);
+  font-weight: 500;
+  color: var(--black);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+  transition: color 0.2s ease;
+}
+
+.direct-contact-item:hover .direct-contact-value {
+  color: var(--cyprus);
+}
+
+.direct-contact-arrow {
+  margin-left: auto;
+  opacity: 0.35;
+  color: var(--cyprus);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.direct-contact-item:hover .direct-contact-arrow {
+  opacity: 1;
+  transform: translate(2px, -2px);
+}
+
+@media (max-width: 640px) {
+  .direct-contact-item {
+    padding: 0.75rem 0.9rem;
+    gap: 0.8rem;
+  }
+  .direct-contact-icon {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+}
+
 /* Services page */
 .service-list {
   display: grid;

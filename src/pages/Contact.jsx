@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { HiArrowUpRight, HiExclamationCircle, HiCheckCircle, HiArrowPath } from "react-icons/hi2";
+import { HiArrowUpRight, HiExclamationCircle, HiCheckCircle, HiArrowPath, HiOutlineEnvelope, HiOutlinePhone } from "react-icons/hi2";
+import { FaWhatsapp, FaInstagram } from "react-icons/fa6";
 import { motion, AnimatePresence } from "framer-motion";
 import SEO from "../components/SEO";
 import Magnetic from "../components/Magnetic";
@@ -13,7 +14,6 @@ import { defaultServices } from "../data/services";
 import { useProfile } from "../hooks/useProfile";
 import { useToast } from "../context/ToastContext";
 import { validateField, validateInquiryForm } from "../utils/inquiryValidation";
-import { formatWhatsAppUrl } from "../data/photographer";
 
 const empty = {
   name: "",
@@ -132,9 +132,46 @@ export default function Contact() {
     setTouched({});
   };
 
-  const wa = useMemo(() => {
-    return formatWhatsAppUrl(profile.whatsapp);
-  }, [profile.whatsapp]);
+  const cleanPhoneTel = useMemo(() => {
+    if (!profile.phone) return "";
+    return `tel:${String(profile.phone).trim().replace(/[^\d+]/g, "")}`;
+  }, [profile.phone]);
+
+  const cleanWhatsAppDigits = useMemo(() => {
+    const raw = String(profile.whatsapp || profile.phone || "").replace(/\D/g, "");
+    if (!raw) return "";
+    return raw.length === 10 ? `91${raw}` : raw;
+  }, [profile.whatsapp, profile.phone]);
+
+  const whatsappUrl = useMemo(() => {
+    if (!cleanWhatsAppDigits) return "";
+    return `https://wa.me/${cleanWhatsAppDigits}`;
+  }, [cleanWhatsAppDigits]);
+
+  const whatsappDisplay = useMemo(() => {
+    return profile.whatsapp || profile.phone || "Chat on WhatsApp";
+  }, [profile.whatsapp, profile.phone]);
+
+  const instagramUrl = useMemo(() => {
+    if (!profile.instagram) {
+      if (profile.instagramHandle) {
+        return `https://instagram.com/${profile.instagramHandle.replace(/^@/, "").trim()}`;
+      }
+      return "";
+    }
+    const clean = profile.instagram.trim();
+    if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+    return `https://instagram.com/${clean.replace(/^@/, "").replace(/\/$/, "")}`;
+  }, [profile.instagram, profile.instagramHandle]);
+
+  const instagramDisplay = useMemo(() => {
+    if (profile.instagramHandle) return profile.instagramHandle;
+    if (profile.instagram) {
+      const handle = profile.instagram.trim().replace(/\/$/, "").split("/").pop();
+      return handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "@Arjuvisuals.co";
+    }
+    return "@Arjuvisuals.co";
+  }, [profile.instagramHandle, profile.instagram]);
 
   const getFieldClass = (field) => {
     if (!touched[field]) return "";
@@ -168,46 +205,90 @@ export default function Contact() {
               Have a project, a creative idea, or a moment you want to capture? Tell me about it.
             </h2>
             <p style={{ fontWeight: 300, marginBottom: "1.6rem" }}>
-              {profile.location}. This form is a frontend prototype — submissions are stored in this browser
-              only and are not emailed or saved to a server.
+              {profile.location}. Inquiries are sent directly to Arjun Murali and saved securely. You can expect a response within 24 to 48 hours.
             </p>
+
             <p className="kicker" style={{ color: "var(--cyprus)", marginBottom: "0.8rem" }}>
               Direct
             </p>
-            {profile.phone ? (
-              <p>
-                <a href={`tel:${profile.phone}`}>{profile.phone}</a>
-              </p>
-            ) : (
-              <p style={{ color: "var(--muted-dark)" }}>Phone — available once configured.</p>
-            )}
-            {profile.email ? (
-              <p style={{ marginTop: "0.5rem" }}>
-                <a href={`mailto:${profile.email}`}>{profile.email}</a>
-              </p>
-            ) : (
-              <p style={{ color: "var(--muted-dark)", marginTop: "0.5rem" }}>Email — once a studio address is published.</p>
-            )}
-            {wa ? (
-              <p style={{ marginTop: "0.5rem" }}>
-                <a href={wa} target="_blank" rel="noopener noreferrer">
-                  WhatsApp
+
+            <div className="direct-contact-list">
+              {/* Email */}
+              {profile.email && (
+                <a
+                  href={`mailto:${profile.email.trim()}`}
+                  className="direct-contact-item"
+                  title={`Email ${profile.name || "Arjun Murali"}`}
+                >
+                  <div className="direct-contact-icon email" aria-hidden="true">
+                    <HiOutlineEnvelope size={20} />
+                  </div>
+                  <div className="direct-contact-details">
+                    <span className="direct-contact-label">Email</span>
+                    <span className="direct-contact-value">{profile.email}</span>
+                  </div>
+                  <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
                 </a>
-              </p>
-            ) : (
-              <p style={{ color: "var(--muted-dark)", marginTop: "0.5rem" }}>
-                WhatsApp — available once a number is configured.
-              </p>
-            )}
-            {profile.instagram ? (
-              <p style={{ marginTop: "0.5rem" }}>
-                <a href={profile.instagram} target="_blank" rel="noopener noreferrer">
-                  Instagram {profile.instagramHandle ? `(${profile.instagramHandle})` : ""}
+              )}
+
+              {/* Phone */}
+              {profile.phone && (
+                <a
+                  href={cleanPhoneTel}
+                  className="direct-contact-item"
+                  title={`Call ${profile.name || "Arjun Murali"}`}
+                >
+                  <div className="direct-contact-icon phone" aria-hidden="true">
+                    <HiOutlinePhone size={20} />
+                  </div>
+                  <div className="direct-contact-details">
+                    <span className="direct-contact-label">Phone</span>
+                    <span className="direct-contact-value">{profile.phone}</span>
+                  </div>
+                  <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
                 </a>
-              </p>
-            ) : (
-              <p style={{ color: "var(--muted-dark)", marginTop: "0.5rem" }}>Instagram — coming soon.</p>
-            )}
+              )}
+
+              {/* WhatsApp */}
+              {whatsappUrl && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="direct-contact-item"
+                  title="Chat on WhatsApp"
+                >
+                  <div className="direct-contact-icon whatsapp" aria-hidden="true">
+                    <FaWhatsapp size={20} />
+                  </div>
+                  <div className="direct-contact-details">
+                    <span className="direct-contact-label">WhatsApp</span>
+                    <span className="direct-contact-value">{whatsappDisplay}</span>
+                  </div>
+                  <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
+                </a>
+              )}
+
+              {/* Instagram */}
+              {instagramUrl && (
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="direct-contact-item"
+                  title="View Instagram Profile"
+                >
+                  <div className="direct-contact-icon instagram" aria-hidden="true">
+                    <FaInstagram size={20} />
+                  </div>
+                  <div className="direct-contact-details">
+                    <span className="direct-contact-label">Instagram</span>
+                    <span className="direct-contact-value">{instagramDisplay}</span>
+                  </div>
+                  <HiArrowUpRight className="direct-contact-arrow" size={16} aria-hidden="true" />
+                </a>
+              )}
+            </div>
 
             <div style={{ marginTop: "2rem", display: "inline-block" }}>
               <InteractiveDoodle
@@ -236,12 +317,12 @@ export default function Contact() {
                 >
                   <div className="inquiry-success-head">
                     <span className="inquiry-success-badge">
-                      <HiCheckCircle size={18} /> Inquiry Recorded
+                      <HiCheckCircle size={18} /> Inquiry Received
                     </span>
                   </div>
 
                   <h3 className="editorial" style={{ fontSize: "1.7rem", lineHeight: 1.25 }}>
-                    Thank you, {submittedData.name}. Your inquiry has been logged in this session.
+                    Thank you, {submittedData.name}. Your inquiry has been received successfully. The ArjuVisuals team will get back to you soon.
                   </h3>
 
                   <div className="inquiry-success-summary">
@@ -253,9 +334,15 @@ export default function Contact() {
                       <span>Email</span>
                       <strong>{submittedData.email}</strong>
                     </div>
+                    {submittedData.phone && (
+                      <div className="inquiry-summary-item">
+                        <span>Phone</span>
+                        <strong>{submittedData.phone}</strong>
+                      </div>
+                    )}
                     {submittedData.eventDate && (
                       <div className="inquiry-summary-item">
-                        <span>Date</span>
+                        <span>Date / Timeline</span>
                         <strong>{submittedData.eventDate}</strong>
                       </div>
                     )}
@@ -273,12 +360,7 @@ export default function Contact() {
                     )}
                   </div>
 
-                  <p className="form-note">
-                    This prototype saved your inquiry to local browser storage. You can view or manage it in the
-                    Admin Dashboard.
-                  </p>
-
-                  <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+                  <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "1rem" }}>
                     <button
                       type="button"
                       className="btn btn-cyprus"

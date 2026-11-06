@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import Lightbox from "./Lightbox";
-import { normCategory } from "../utils/projectFilters";
-import { disciplineService } from "../services/disciplineService";
+import { getPublishedDisciplines, normCategory } from "../utils/projectFilters";
 
 function flatten(projects) {
   const photoTiles = [];
@@ -106,11 +105,6 @@ export default function InteractiveGallery({
   const [type, setType] = useState(initialType || "all");
   const [filter, setFilter] = useState(initialFilter || "All");
   const [lb, setLb] = useState(null);
-  const [disciplines, setDisciplines] = useState([]);
-
-  useEffect(() => {
-    disciplineService.list().then(setDisciplines).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (initialType) setType(initialType);
@@ -127,54 +121,20 @@ export default function InteractiveGallery({
     setFilter("All"); // Reset category filter on type change to prevent incompatible filter states
   };
 
+  // Generate category filters dynamically ONLY from published projects
   const availableCategories = useMemo(() => {
-    const presentCats = new Set();
-    const published = (projects || []).filter((p) => p.status === "published");
+    return getPublishedDisciplines(type, projects);
+  }, [type, projects]);
 
-    published.forEach((p) => {
-      const pType = p.type || "photography";
-      if (type === "all" || pType === type) {
-        if (p.category) presentCats.add(p.category);
+  // If active filter no longer exists in available categories (e.g. project deleted or set to draft), reset to All
+  useEffect(() => {
+    if (filter && filter !== "All" && availableCategories.length > 0) {
+      const exists = availableCategories.some((c) => normCategory(c) === normCategory(filter));
+      if (!exists) {
+        setFilter("All");
       }
-    });
-
-    (disciplines || []).forEach((d) => {
-      if (type === "all" || d.type === type) {
-        if (d.name) presentCats.add(d.name);
-      }
-    });
-
-    const canonical = [
-      "Wedding Photography",
-      "Portrait Photography",
-      "Nature Photography",
-      "Travel Photography",
-      "Fashion Photography",
-      "Event Photography",
-      "Product Photography",
-      "Cinematic Films",
-      "Commercial Videos",
-      "Music Videos",
-      "Wedding Films",
-      "Reels & Short Films",
-    ];
-
-    const ordered = [];
-    canonical.forEach((c) => {
-      const match = Array.from(presentCats).find((pc) => normCategory(pc) === normCategory(c));
-      if (match && !ordered.some((o) => normCategory(o) === normCategory(match))) {
-        ordered.push(match);
-      }
-    });
-
-    presentCats.forEach((pc) => {
-      if (!ordered.some((o) => normCategory(o) === normCategory(pc))) {
-        ordered.push(pc);
-      }
-    });
-
-    return ordered;
-  }, [type, projects, disciplines]);
+    }
+  }, [availableCategories, filter]);
 
   const tiles = useMemo(() => {
     let list = allTiles;

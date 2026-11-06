@@ -9,6 +9,8 @@ import { saveDeviceVideoFile, resolveVideoUrl, formatBytes } from "../../utils/v
 import { useToast } from "../../context/ToastContext";
 import { compressImageFile } from "../../utils/imageUtils";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
+
 const normalizeMediaItem = (item, defaultLoc = "") => {
   if (!item) return null;
   if (typeof item === "string") {
@@ -192,6 +194,13 @@ export default function AdminProjectForm() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > MAX_FILE_SIZE) {
+      const mb = (file.size / (1024 * 1024)).toFixed(1);
+      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+      if (coverFileInputRef.current) coverFileInputRef.current.value = "";
+      return;
+    }
+
     setUploadingCover(true);
     try {
       const urls = await uploadFilesToCloudinary([file]);
@@ -227,6 +236,15 @@ export default function AdminProjectForm() {
   const onGalleryFiles = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+
+    const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      const maxOversized = oversized.reduce((max, f) => (f.size > max.size ? f : max), oversized[0]);
+      const mb = (maxOversized.size / (1024 * 1024)).toFixed(1);
+      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+      if (galleryFileInputRef.current) galleryFileInputRef.current.value = "";
+      return;
+    }
 
     setUploadingGallery(true);
     try {
@@ -285,6 +303,15 @@ export default function AdminProjectForm() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
+    const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      const maxOversized = oversized.reduce((max, f) => (f.size > max.size ? f : max), oversized[0]);
+      const mb = (maxOversized.size / (1024 * 1024)).toFixed(1);
+      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+      if (stillsFileInputRef.current) stillsFileInputRef.current.value = "";
+      return;
+    }
+
     setUploadingStills(true);
     try {
       const urls = await uploadFilesToCloudinary(files);
@@ -341,6 +368,13 @@ export default function AdminProjectForm() {
   const onVideoDeviceFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      const mb = (file.size / (1024 * 1024)).toFixed(1);
+      toast.push(`This file is too large (${mb} MB). Please upload a file smaller than 10 MB.`, "err");
+      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
+      return;
+    }
 
     setVideoUploading(true);
     try {
@@ -517,73 +551,40 @@ export default function AdminProjectForm() {
 
       <form className="admin-card form-grid" onSubmit={(e) => e.preventDefault()}>
         {/* ==========================================
-            SECTION 1: BASIC INFORMATION
+            SECTION 1: BASIC PROJECT INFORMATION
         =========================================== */}
-        <p className="kicker">1 — Project Basic Information</p>
+        <p className="kicker">SECTION 1 — Basic Project Information</p>
 
-        {/* Project Medium / Type & Status */}
-        <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-          <div className="field" style={{ flex: 1, minWidth: 260 }}>
-            <label style={{ display: "block", marginBottom: "0.6rem" }}>
-              Project Medium / Type <span className="req">*</span>
-            </label>
-            <div className="admin-type-tabs" role="radiogroup" aria-label="Project Type">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={!isVideo}
-                className={`admin-type-btn ${!isVideo ? "active" : ""}`}
-                onClick={() => handleTypeSwitch("photography")}
-              >
-                📷 Photography
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={isVideo}
-                className={`admin-type-btn ${isVideo ? "active" : ""}`}
-                onClick={() => handleTypeSwitch("videography")}
-              >
-                🎬 Videography
-              </button>
-            </div>
-            <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.35rem", display: "block" }}>
-              {isVideo
-                ? "Videography projects stream video and feature production stills."
-                : "Photography projects feature high-resolution gallery frames."}
-            </span>
+        {/* Project Medium / Type */}
+        <div className="field" style={{ marginBottom: "0.5rem" }}>
+          <label style={{ display: "block", marginBottom: "0.6rem" }}>
+            Project Medium / Type <span className="req">*</span>
+          </label>
+          <div className="admin-type-tabs" role="radiogroup" aria-label="Project Type">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!isVideo}
+              className={`admin-type-btn ${!isVideo ? "active" : ""}`}
+              onClick={() => handleTypeSwitch("photography")}
+            >
+              📷 Photography
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isVideo}
+              className={`admin-type-btn ${isVideo ? "active" : ""}`}
+              onClick={() => handleTypeSwitch("videography")}
+            >
+              🎬 Videography
+            </button>
           </div>
-
-          <div className="field" style={{ flex: 1, minWidth: 260 }}>
-            <label style={{ display: "block", marginBottom: "0.6rem" }}>
-              Publication Status <span className="req">*</span>
-            </label>
-            <div className="admin-type-tabs" role="radiogroup" aria-label="Project Status">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={form.status === "draft"}
-                className={`admin-type-btn ${form.status === "draft" ? "active" : ""}`}
-                onClick={() => set("status", "draft")}
-              >
-                ✎ Draft
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={form.status === "published"}
-                className={`admin-type-btn ${form.status === "published" ? "active" : ""}`}
-                onClick={() => set("status", "published")}
-              >
-                ✓ Published
-              </button>
-            </div>
-            <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.35rem", display: "block" }}>
-              {form.status === "draft"
-                ? "Draft projects remain private and hidden from public filters and search."
-                : "Published projects immediately appear in public filters and galleries."}
-            </span>
-          </div>
+          <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.35rem", display: "block" }}>
+            {isVideo
+              ? "Videography projects stream video and feature production stills."
+              : "Photography projects feature high-resolution gallery frames."}
+          </span>
         </div>
 
         {/* Title and Slug */}
@@ -742,20 +743,6 @@ export default function AdminProjectForm() {
           </div>
         </div>
 
-        {/* Featured Toggle */}
-        <div style={{ margin: "0.5rem 0 1rem" }}>
-          <label style={{ display: "flex", gap: "0.6rem", alignItems: "center", cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={form.featured}
-              onChange={(e) => set("featured", e.target.checked)}
-            />
-            <span style={{ fontSize: "0.88rem" }}>
-              Feature this project on the Home page highlight reel ({isVideo ? "Featured Film" : "Featured Photography"})
-            </span>
-          </label>
-        </div>
-
         {/* ========================================================
             SECTION 2: MEDIA BY TYPE (PHOTOGRAPHY vs VIDEOGRAPHY)
         ========================================================= */}
@@ -764,7 +751,7 @@ export default function AdminProjectForm() {
              PHOTOGRAPHY MEDIA (All video fields completely hidden)
           ========================================================= */
           <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--dark-border)", paddingTop: "1.2rem" }}>
-            <p className="kicker">2 — Photography Media</p>
+            <p className="kicker">SECTION 2 — Photography Media</p>
             <span style={{ fontSize: "0.78rem", color: "var(--muted)", display: "block", marginBottom: "1.2rem" }}>
               Upload the series cover photograph and gallery frames. All video fields are hidden because this is a photography project.
             </span>
@@ -1038,7 +1025,7 @@ export default function AdminProjectForm() {
              VIDEOGRAPHY MEDIA (Photo gallery completely hidden)
           ========================================================= */
           <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--dark-border)", paddingTop: "1.2rem" }}>
-            <p className="kicker">2 — Videography Media &amp; Film Stream</p>
+            <p className="kicker">SECTION 2 — Videography Media &amp; Film Stream</p>
             <span style={{ fontSize: "0.78rem", color: "var(--muted)", display: "block", marginBottom: "1.2rem" }}>
               Configure video streaming source, poster thumbnail, duration, and production stills. Photography gallery fields are hidden for videography projects.
             </span>
@@ -1446,62 +1433,114 @@ export default function AdminProjectForm() {
         )}
 
         {/* ========================================================
-            SUBMIT / SAVE ACTIONS
+            SECTION 3 — PUBLISHING SETTINGS
         ========================================================= */}
-        <div
-          style={{
-            gridColumn: "1 / -1",
-            display: "flex",
-            gap: "1rem",
-            alignItems: "center",
-            flexWrap: "wrap",
-            paddingTop: "1.4rem",
-            marginTop: "0.8rem",
-            borderTop: "1px solid var(--dark-border)",
-          }}
-        >
-          <button
-            type="button"
-            className="btn btn-outline"
-            disabled={processing || videoUploading}
-            onClick={() => handleSave("draft")}
-            style={{
-              borderColor: "var(--sand)",
-              color: "var(--sand)",
-              padding: "0.75rem 1.6rem",
-              fontSize: "0.85rem",
-              cursor: "pointer",
-            }}
-          >
-            ✎ Save as Draft
-          </button>
+        <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--dark-border)", paddingTop: "1.2rem" }}>
+          <p className="kicker">SECTION 3 — Publishing Settings</p>
+          <span style={{ fontSize: "0.78rem", color: "var(--muted)", display: "block", marginBottom: "1.2rem" }}>
+            Control publication visibility and homepage prominence. Draft projects remain private and hidden from public filters.
+          </span>
 
-          <button
-            type="button"
-            className="btn btn-sand"
-            disabled={processing || videoUploading}
-            onClick={() => handleSave("published")}
-            style={{
-              padding: "0.75rem 1.8rem",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            ✓ Publish Project
-          </button>
+          <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start", marginBottom: "1.2rem" }}>
+            <div className="field" style={{ flex: 1, minWidth: 260 }}>
+              <label style={{ display: "block", marginBottom: "0.6rem" }}>
+                Publication Status <span className="req">*</span>
+              </label>
+              <div className="admin-type-tabs" role="radiogroup" aria-label="Project Status">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={form.status === "draft"}
+                  className={`admin-type-btn ${form.status === "draft" ? "active" : ""}`}
+                  onClick={() => set("status", "draft")}
+                >
+                  ✎ Draft
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={form.status === "published"}
+                  className={`admin-type-btn ${form.status === "published" ? "active" : ""}`}
+                  onClick={() => set("status", "published")}
+                >
+                  ✓ Published
+                </button>
+              </div>
+              <span style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.35rem", display: "block" }}>
+                {form.status === "draft"
+                  ? "Draft projects remain private and hidden from public filters and search."
+                  : "Published projects immediately appear in public filters and galleries."}
+              </span>
+            </div>
 
-          <Link
-            to="/admin/projects"
+            <div className="field" style={{ flex: 1, minWidth: 260, paddingTop: "1.8rem" }}>
+              <label style={{ display: "flex", gap: "0.6rem", alignItems: "center", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.featured}
+                  onChange={(e) => set("featured", e.target.checked)}
+                />
+                <span style={{ fontSize: "0.88rem" }}>
+                  Feature this project on the Home page highlight reel ({isVideo ? "Featured Film" : "Featured Photography"})
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div
             style={{
-              color: "var(--muted)",
-              fontSize: "0.8rem",
-              marginLeft: "auto",
-              textDecoration: "underline",
+              display: "flex",
+              gap: "1rem",
+              alignItems: "center",
+              flexWrap: "wrap",
+              paddingTop: "1.2rem",
+              borderTop: "1px solid var(--dark-border)",
             }}
           >
-            Cancel
-          </Link>
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={processing || videoUploading}
+              onClick={() => handleSave("draft")}
+              style={{
+                borderColor: "var(--sand)",
+                color: "var(--sand)",
+                padding: "0.75rem 1.6rem",
+                fontSize: "0.85rem",
+                cursor: "pointer",
+              }}
+            >
+              ✎ Save as Draft
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-sand"
+              disabled={processing || videoUploading}
+              onClick={() => handleSave("published")}
+              style={{
+                padding: "0.75rem 1.8rem",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              ✓ Publish Project
+            </button>
+
+            <Link
+              to="/admin/projects"
+              style={{
+                color: "var(--muted)",
+                fontSize: "0.8rem",
+                marginLeft: "auto",
+                textDecoration: "underline",
+              }}
+            >
+              Cancel
+            </Link>
+          </div>
         </div>
       </form>
     </>

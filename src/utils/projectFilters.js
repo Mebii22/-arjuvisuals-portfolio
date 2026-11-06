@@ -1,4 +1,4 @@
-import { PHOTOGRAPHY_CATEGORIES, VIDEOGRAPHY_CATEGORIES } from "../data/projects";
+import { PHOTOGRAPHY_CATEGORIES, VIDEOGRAPHY_CATEGORIES } from "../data/projects.js";
 
 export { PHOTOGRAPHY_CATEGORIES, VIDEOGRAPHY_CATEGORIES };
 
@@ -16,107 +16,40 @@ export const normCategory = norm;
 
 /**
  * Returns available categories according to selected primary portfolio type.
- * Supports dynamic categories from projects created by admin.
+ * Generates filters dynamically ONLY from published projects.
+ *
+ * - If an admin creates a new discipline but no published project uses it, it will NOT show publicly.
+ * - If the only project using a discipline is changed to Draft, it disappears automatically.
+ * - If all projects using a discipline are deleted, it disappears automatically.
+ * - If a new published project uses a new discipline, it appears automatically.
+ * - Does not hardcode categories.
  */
-export function getCategoriesForType(type = "all", projects = [], { onlyExisting = false } = {}) {
-  if (onlyExisting) {
-    const presentCats = new Set();
-    (projects || []).forEach((p) => {
-      const pType = p.type || "photography";
-      if (type === "all" || pType === type) {
-        if (p.category) presentCats.add(p.category);
-      }
-    });
+export function getCategoriesForType(type = "all", projects = []) {
+  // 1. Strictly filter projects where status === "published"
+  const publishedProjects = (projects || []).filter(
+    (project) => project.status === "published"
+  );
 
-    if (type === "photography") {
-      const ordered = PHOTOGRAPHY_CATEGORIES.filter((c) =>
-        Array.from(presentCats).some((pc) => norm(pc) === norm(c))
-      );
-      presentCats.forEach((pc) => {
-        if (!ordered.some((o) => norm(o) === norm(pc))) ordered.push(pc);
-      });
-      return ordered;
-    }
+  // 2. Filter by active medium / type (photography vs videography)
+  const matchingProjects = publishedProjects.filter((project) => {
+    if (type === "all") return true;
+    const pType = project.type || "photography";
+    return pType === type;
+  });
 
-    if (type === "videography") {
-      const ordered = VIDEOGRAPHY_CATEGORIES.filter((c) =>
-        Array.from(presentCats).some((pc) => norm(pc) === norm(c))
-      );
-      presentCats.forEach((pc) => {
-        if (!ordered.some((o) => norm(o) === norm(pc))) ordered.push(pc);
-      });
-      return ordered;
-    }
-
-    // Unified for "All Works"
-    const orderedBase = [
-      "Wedding",
-      "Portrait",
-      "Fashion",
-      "Event",
-      "Travel",
-      "Nature",
-      "Product",
-      "Cinematic Films",
-      "Commercial Videos",
-      "Music Videos",
-      "Reels & Short Films",
-    ];
-    const ordered = orderedBase.filter((c) =>
-      Array.from(presentCats).some((pc) => norm(pc) === norm(c))
-    );
-    presentCats.forEach((pc) => {
-      if (!ordered.some((o) => norm(o) === norm(pc))) ordered.push(pc);
-    });
-    return ordered;
-  }
-
-  if (type === "photography") {
-    const list = [...PHOTOGRAPHY_CATEGORIES];
-    // Collect any custom categories added by admin to photography projects
-    (projects || []).forEach((p) => {
-      const pType = p.type || "photography";
-      if (pType === "photography" && p.category && !list.some((c) => norm(c) === norm(p.category))) {
-        list.push(p.category);
-      }
-    });
-    return list;
-  }
-
-  if (type === "videography") {
-    const list = [...VIDEOGRAPHY_CATEGORIES];
-    // Collect any custom categories added by admin to videography projects
-    (projects || []).forEach((p) => {
-      if (p.type === "videography" && p.category && !list.some((c) => norm(c) === norm(p.category))) {
-        list.push(p.category);
-      }
-    });
-    return list;
-  }
-
-  // Unified non-duplicated categories for "All Works"
-  const unified = [
-    "Wedding",
-    "Portrait",
-    "Fashion",
-    "Event",
-    "Travel",
-    "Nature",
-    "Product",
-    "Cinematic Films",
-    "Commercial Videos",
-    "Music Videos",
-    "Reels & Short Films",
-  ];
-
-  (projects || []).forEach((p) => {
-    if (p.category && !unified.some((u) => norm(u) === norm(p.category))) {
-      unified.push(p.category);
+  // 3. Extract unique disciplines dynamically ONLY from published projects
+  const disciplines = [];
+  matchingProjects.forEach((project) => {
+    const discipline = project.discipline || project.category || project.subCategory;
+    if (discipline && !disciplines.some((d) => norm(d) === norm(discipline))) {
+      disciplines.push(discipline);
     }
   });
 
-  return unified;
+  return disciplines;
 }
+
+export const getPublishedDisciplines = getCategoriesForType;
 
 /**
  * Detects provider and normalizes embedded player URLs.
