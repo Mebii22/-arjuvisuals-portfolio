@@ -616,7 +616,7 @@ export default function Contact() {
                       disabled={submitting}
                       style={{ width: "fit-content" }}
                     >
-                      {submitting ? "Saving inquiry…" : "Send inquiry"} <HiArrowUpRight />
+                      {submitting ? "Sending inquiry…" : "Send inquiry"} <HiArrowUpRight />
                     </button>
                   </Magnetic>
                 </motion.form>

@@ -26,12 +26,39 @@ export default function AdminInquiries() {
       await inquiryService.update(id, payload);
       toast.push("Inquiry updated.");
       load();
+      window.dispatchEvent(new CustomEvent("inquiriesUpdated"));
       if (open && (open.id === id || open._id === id)) {
         const next = await inquiryService.getById(id);
         setOpen(next);
       }
     } catch (err) {
       toast.push(err.message || "Could not update inquiry.", "err");
+    }
+  };
+
+  const handleOpenDetails = async (inquiry) => {
+    setOpen(inquiry);
+
+    // If inquiry has not yet been viewed by admin, automatically mark it as read
+    if (!inquiry.isRead) {
+      // 1. Optimistically update local state immediately
+      setList((prev) =>
+        prev.map((item) =>
+          (item.id === inquiry.id || item._id === inquiry.id || item.id === inquiry._id)
+            ? { ...item, isRead: true }
+            : item
+        )
+      );
+
+      // 2. Immediately notify AdminSidebar and AdminDashboard to decrease badge
+      window.dispatchEvent(new CustomEvent("inquiriesUpdated"));
+
+      // 3. Persist read status to MongoDB Atlas via PATCH /api/inquiries/:id/read
+      try {
+        await inquiryService.markAsRead(inquiry.id || inquiry._id);
+      } catch (err) {
+        console.warn("Could not sync read status with server:", err.message);
+      }
     }
   };
 
@@ -75,9 +102,30 @@ export default function AdminInquiries() {
               )}`;
 
               return (
-                <tr key={i.id || i._id}>
+                <tr key={i.id || i._id} style={{ background: !i.isRead ? "rgba(230, 57, 70, 0.04)" : "transparent" }}>
                   <td>
-                    <strong style={{ color: "var(--stone)", display: "block" }}>{i.name}</strong>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                      {!i.isRead && (
+                        <span
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            background: "#e63946",
+                            boxShadow: "0 0 6px rgba(230, 57, 70, 0.7)",
+                            display: "inline-block",
+                            flexShrink: 0,
+                          }}
+                          title="Unread inquiry"
+                        />
+                      )}
+                      <strong
+                        onClick={() => handleOpenDetails(i)}
+                        style={{ color: "var(--stone)", display: "block", cursor: "pointer" }}
+                      >
+                        {i.name}
+                      </strong>
+                    </div>
                     <span style={{ fontSize: "0.74rem", color: "var(--muted)" }}>{i.email}</span>
                     {i.phone && (
                       <span style={{ fontSize: "0.72rem", color: "var(--muted)", display: "block" }}>
@@ -194,7 +242,7 @@ export default function AdminInquiries() {
                       {/* View Details Modal */}
                       <button
                         type="button"
-                        onClick={() => setOpen(i)}
+                        onClick={() => handleOpenDetails(i)}
                         style={{ padding: "0.3rem 0.55rem", fontSize: "0.74rem" }}
                       >
                         Details
@@ -421,6 +469,7 @@ export default function AdminInquiries() {
                   setConfirm(null);
                   toast.push("Inquiry removed from database.");
                   load();
+                  window.dispatchEvent(new CustomEvent("inquiriesUpdated"));
                 }}
               >
                 Delete

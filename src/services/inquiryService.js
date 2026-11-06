@@ -6,6 +6,7 @@ const mapInquiry = (i) => {
     ...i,
     id: i._id || i.id,
     _id: i._id || i.id,
+    isRead: i.isRead === true,
   };
 };
 
@@ -18,6 +19,20 @@ export const inquiryService = {
     const res = await apiRequest("/inquiries");
     const list = Array.isArray(res) ? res : res?.data || [];
     return list.map(mapInquiry);
+  },
+
+  /**
+   * Fetch the current unread inquiry count directly from backend.
+   * Admin-protected endpoint.
+   */
+  async getUnreadCount() {
+    try {
+      const res = await apiRequest("/inquiries/unread-count");
+      return typeof res?.count === "number" ? res.count : 0;
+    } catch {
+      const list = await this.list();
+      return list.filter((i) => !i.isRead).length;
+    }
   },
 
   /**
@@ -40,6 +55,22 @@ export const inquiryService = {
     });
     const data = res && res.data ? res.data : res;
     return mapInquiry(data);
+  },
+
+  /**
+   * Mark an inquiry as viewed/read without altering its contact status.
+   * Admin-protected endpoint.
+   */
+  async markAsRead(id) {
+    try {
+      const res = await apiRequest(`/inquiries/${id}/read`, {
+        method: "PATCH",
+      });
+      const data = res && res.data ? res.data : res;
+      return mapInquiry(data);
+    } catch {
+      return await this.update(id, { isRead: true });
+    }
   },
 
   /**

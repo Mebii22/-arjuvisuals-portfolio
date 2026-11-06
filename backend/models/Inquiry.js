@@ -57,6 +57,11 @@ const inquirySchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    isRead: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     notes: {
       type: String,
       default: "",

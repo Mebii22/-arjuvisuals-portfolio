@@ -22,8 +22,11 @@ const app = express();
 const rawClientUrls = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.split(",").map((u) => u.trim())
   : [];
-const allowedOrigins = [
+const defaultAllowedOrigins = [
   ...rawClientUrls,
+  "https://arjuvisuals.co",
+  "https://www.arjuvisuals.co",
+  "https://arjuvisuals.vercel.app",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:3000",
@@ -33,13 +36,19 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     const normalizedOrigin = origin.replace(/\/+$/, "");
-    const isAllowed = allowedOrigins.some(
-      (allowed) => allowed.replace(/\/+$/, "") === normalizedOrigin
-    );
-    if (isAllowed || process.env.NODE_ENV !== "production") {
+    const isAllowed =
+      defaultAllowedOrigins.some(
+        (allowed) => allowed.replace(/\/+$/, "") === normalizedOrigin
+      ) ||
+      normalizedOrigin.endsWith(".vercel.app") ||
+      normalizedOrigin.endsWith("arjuvisuals.co") ||
+      process.env.NODE_ENV !== "production";
+
+    if (isAllowed) {
       callback(null, true);
     } else {
-      callback(new Error(`CORS origin not allowed: ${origin}`));
+      console.warn(`[CORS] Origin rejected: ${origin}`);
+      callback(null, false);
     }
   },
   credentials: true,

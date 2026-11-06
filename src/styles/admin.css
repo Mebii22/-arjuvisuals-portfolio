@@ -53,6 +53,23 @@
   background: var(--deep-red);
   color: var(--stone);
 }
+.sidebar-inquiry-badge {
+  margin-left: auto;
+  background: #e63946;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.42rem;
+  min-width: 19px;
+  height: 19px;
+  border-radius: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(230, 57, 70, 0.5);
+  transition: transform 0.2s ease;
+}
 .admin-side .logout {
   border: 1px solid var(--dark-border);
   background: transparent;

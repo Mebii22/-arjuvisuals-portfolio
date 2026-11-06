@@ -33,10 +33,32 @@ export async function apiRequest(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const res = await fetch(`${API_CONFIG.BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  // 20-second timeout safety to ensure fetch never hangs indefinitely in production
+  let timeoutId;
+  let signal = options.signal;
+  if (!signal && typeof AbortController !== "undefined") {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutId = setTimeout(() => {
+      controller.abort();
+    }, options.timeout || 20000);
+  }
+
+  let res;
+  try {
+    res = await fetch(`${API_CONFIG.BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal,
+    });
+  } catch (fetchErr) {
+    if (fetchErr.name === "AbortError") {
+      throw new Error("Request timed out. Please check your connection and try again.");
+    }
+    throw fetchErr;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     let errorMsg = `Request failed (${res.status})`;

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   HiOutlineSquares2X2,
@@ -7,6 +8,7 @@ import {
   HiOutlineUser,
   HiOutlineCamera,
 } from "react-icons/hi2";
+import { inquiryService } from "../services/inquiryService";
 
 const LINKS = [
   { to: "/admin/dashboard", label: "Overview", icon: HiOutlineSquares2X2 },
@@ -18,6 +20,32 @@ const LINKS = [
 ];
 
 export default function AdminSidebar({ open, onLogout }) {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const fetchUnread = () => {
+      inquiryService
+        .list()
+        .then((list) => {
+          if (!active) return;
+          const count = Array.isArray(list) ? list.filter((i) => !i.isRead).length : 0;
+          setUnreadCount(count);
+        })
+        .catch(() => {});
+    };
+
+    fetchUnread();
+    window.addEventListener("focus", fetchUnread);
+    window.addEventListener("inquiriesUpdated", fetchUnread);
+
+    return () => {
+      active = false;
+      window.removeEventListener("focus", fetchUnread);
+      window.removeEventListener("inquiriesUpdated", fetchUnread);
+    };
+  }, []);
+
   return (
     <aside className={`admin-side ${open ? "open" : ""}`}>
       <div className="brand">ARJU VISUALS</div>
@@ -25,7 +53,13 @@ export default function AdminSidebar({ open, onLogout }) {
       <nav>
         {LINKS.map((l) => (
           <NavLink key={l.to} to={l.to} className={({ isActive }) => (isActive ? "active" : "")}>
-            <l.icon /> {l.label}
+            <l.icon />
+            <span style={{ flex: 1 }}>{l.label}</span>
+            {l.to === "/admin/inquiries" && unreadCount > 0 && (
+              <span className="sidebar-inquiry-badge" title={`${unreadCount} unread inquiries`}>
+                {unreadCount}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

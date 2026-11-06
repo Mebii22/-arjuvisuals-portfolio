@@ -13,9 +13,19 @@ export default function AdminDashboard() {
   const [projects, setProjects] = useState([]);
   const [inquiries, setInquiries] = useState([]);
 
-  useEffect(() => {
+  const loadStats = () => {
     projectService.list({ includeDrafts: true }).then(setProjects).catch(() => setProjects([]));
-    inquiryService.list().then(setInquiries).catch(() => setInquiries([]));
+    inquiryService.list().then((list) => setInquiries(Array.isArray(list) ? list : [])).catch(() => setInquiries([]));
+  };
+
+  useEffect(() => {
+    loadStats();
+    window.addEventListener("focus", loadStats);
+    window.addEventListener("inquiriesUpdated", loadStats);
+    return () => {
+      window.removeEventListener("focus", loadStats);
+      window.removeEventListener("inquiriesUpdated", loadStats);
+    };
   }, []);
 
   const total = projects.length;
@@ -23,7 +33,7 @@ export default function AdminDashboard() {
   const videography = projects.filter((p) => p.type === "videography").length;
   const published = projects.filter((p) => p.status === "published").length;
   const drafts = projects.filter((p) => p.status === "draft").length;
-  const fresh = inquiries.filter((i) => i.status === "new").length;
+  const unreadInquiries = inquiries.filter((i) => !i.isRead).length;
 
   const cleanPhone = String(profile.whatsapp || profile.phone || "").replace(/\D/g, "");
   const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : "";
@@ -51,7 +61,7 @@ export default function AdminDashboard() {
           [videography, "Videography", "/admin/projects"],
           [published, "Published", "/admin/projects?status=published"],
           [drafts, "Drafts", "/admin/projects?status=draft"],
-          [fresh, "New inquiries", "/admin/inquiries"],
+          [unreadInquiries, "Unread inquiries", "/admin/inquiries"],
         ].map(([n, label, href], i) => (
           <Link
             key={label}
